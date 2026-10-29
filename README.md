@@ -6,8 +6,8 @@ your test oracle against every such mutant, and reports which mutants your tests
 offers numerical equivalence checks (exact models, within a tolerance) and a finite-shot sampling
 oracle whose verdicts carry statistical guarantees under stated assumptions.
 
-**Status: pre-alpha.** The API may change. qmutate is not published on PyPI and has no public
-repository yet; install it from a local copy of the source.
+**Status: pre-alpha.** The API may change. qmutate is not published on PyPI; install it from source as
+described in [Requirements and installation](#requirements-and-installation).
 
 ## Why mutation testing for quantum circuits
 
@@ -46,6 +46,16 @@ There is one mutation operator: removal of a single top-level instruction. Every
 - `pytest>=8,<10` for the tests (the `test` extra).
 
 See [Verified versions](#verified-versions) for what has actually been tested.
+
+Get the source and change into the project directory:
+
+```bash
+git clone https://github.com/rasidi3112/qmutate.git
+```
+
+```bash
+cd qmutate
+```
 
 With [uv](https://docs.astral.sh/uv/), from the project directory:
 
