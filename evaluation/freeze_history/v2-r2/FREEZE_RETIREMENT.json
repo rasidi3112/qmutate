@@ -1,0 +1,20 @@
+{
+ "lock_sha256": "ea4f9a6d524722d12a127c8b416bf5f5ab126528e9b46839b1434fe16f1626e6",
+ "lock_status": "approved",
+ "manifest_sha256": "7b980eb3ddc88d6ce9472d93c0708023261a423a6b903f19b5f855bc1d899dbc",
+ "operation": "retire",
+ "originals_sha256": {
+  "evaluation/PROTOCOL.md": "278160edb01be207c9254b332311b407fe137e411909db1d54e5a8b65ab41b29",
+  "evaluation/analysis.py": "7930a2a70150841d6d9668dd63a2d5854c5ac981afa0ce8df09a393d272039a0",
+  "evaluation/check_code_freeze.py": "760da18f65097134c5063b97e74fed91c0dabf725c262f52e2ca39a83c4cdbd4",
+  "evaluation/check_protocol.py": "9036e66f39e7ae59653468588fc2ad52d7ad49be9eda2384748338a6962db61d",
+  "evaluation/make_seeds.py": "dfe1e1b14db8ce5bb86bc4b5fec7fd07c76b7c842e1343569c65e3b4e737a539",
+  "evaluation/protocol.lock.json": "1d5c6d7557d8aa8f8717dd17bea5a74ca1d141843ff6094b35557e848aa855d8",
+  "evaluation/run_study.py": "08f7fea7054e53daeee54acc95286333f113e9024109fe53553fec0ba89f053f",
+  "evaluation/study_config.py": "122af5617044810114ba905d4fdf838cde65cd1f9a34ad816c9dc00dc48dbdc4",
+  "evaluation/suites.py": "e8548bf86764171dda539d25ec117d42da2a7b471e7ef5a561adb6ce965eb0a4",
+  "tests/test_evaluation_harness.py": "6ecb232af2bf56429f76828a6ccb43cb717866286148ea9f7d6d14ac6c68710d"
+ },
+ "retired_protocol_revision": 6,
+ "seeds_sha256": "15c2a225e3f880386976e75fd401b58a9c3f6630629a6c0c1f6babf92dbffdb3"
+}

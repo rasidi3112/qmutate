@@ -1,0 +1,117 @@
+"""Fixed parameters of the Phase 6A formal study (protocol revision 8).
+
+This module holds the parameters ``PROTOCOL.md`` specifies, so that the
+future ``make_seeds.py``, ``suites.py`` and ``run_study.py`` read them from one
+place. Expected modes, supports and marginals are derived from the frozen
+hand-derived distributions, not restated. Nothing here runs a suite.
+"""
+
+from fractions import Fraction
+
+from evaluation import circuits
+
+PROTOCOL_REVISION = 8
+SEED_FILE_REVISIONS = (6, 7, 8)
+PROTOCOL_FILE = "evaluation/PROTOCOL.md"
+PROTOCOL_LOCK_FILE = "evaluation/protocol.lock.json"
+
+SUITES = ("T1", "T2", "T3", "T4", "T5", "T6")
+SAMPLING_SUITES = ("T2", "T3", "T4", "T5")
+SEEDED_SUITES = ("T1", "T2", "T3", "T4", "T5")
+DEDUP_SUITES = ("T2", "T3", "T4", "T5", "T6")
+FAULT_EXECUTION_CHECK_SHOTS = 16
+
+SHOTS = {"T1": 16, "T2": 1000, "T3": 100, "T4": 4000, "T5": 8000}
+T4_TOLERANCE = Fraction(5, 100)
+T5_TOLERANCE = Fraction(5, 100)
+T6_ATOL = 1e-8
+CLASSIFIER_ATOL = 1e-8
+PRE_RUN_EXACT_TOLERANCE = 1e-12
+PRE_RUN_SHOTS = 100000
+PRE_RUN_DELTA = 1e-6
+STATE_GROUP_ATOL = 1e-8
+T6_GROUP_FLOAT_SLACK = 1e-10
+
+APPLICABILITY = {
+    "C1": ("T1", "T3", "T4", "T5", "T6"),
+    "C2": ("T1", "T2", "T3", "T4", "T5", "T6"),
+    "C3": ("T1", "T2", "T3", "T4", "T5", "T6"),
+    "C4": ("T1", "T2", "T4", "T5", "T6"),
+    "C5": ("T1", "T4", "T5", "T6"),
+    "C6": ("T1", "T4", "T5", "T6"),
+}
+T4_BIT = {"C1": 0, "C2": 0, "C3": 0, "C4": 1, "C5": 0, "C6": 2}
+
+RQ4_EXTRA_SEEDS = 20
+PERMUTATIONS = 100000
+ORACLE_ALPHA = 0.05
+ORACLE_TOLERANCE_TARGET = 0.05
+FAULT_SETS = ("all", "without_missing_gate")
+ANALYSES = ("primary", "dedup_sensitivity")
+POOLED_STATISTICS = ("tau_pooled", "tau_pooled_def")
+
+SEEDS_FILE = "evaluation/seeds.json"
+OUTPUT_PREFIX = {"pre_run_checks": "pre-run-", "full": "run-"}
+QMUTATE_SOURCE = "src/qmutate"
+CODE_FREEZE_FILE = "evaluation/code_freeze.json"
+CODE_FREEZE_LOCK_FILE = "evaluation/code_freeze.lock.json"
+SEEDS_LOCK_FILE = "evaluation/seeds.lock.json"
+REQUIRED_ENVIRONMENT = {"VECLIB_MAXIMUM_THREADS": "1"}
+RESULTS_DIR = "evaluation/results"
+PROTECTED_PATHS = (
+    "evaluation/preflight",
+    "evaluation/manifest.json",
+    "evaluation/CATALOGUE_FREEZE.md",
+    "evaluation/PROTOCOL.md",
+    "evaluation/protocol.lock.json",
+    "evaluation/seeds.json",
+    "evaluation/code_freeze.json",
+    "evaluation/code_freeze.lock.json",
+    "evaluation/seeds.lock.json",
+)
+
+
+def expected_mode(circuit_id):
+    """Return the unique most likely outcome of the expected distribution, or ``None``."""
+    distribution = circuits.expected_distribution(circuit_id)
+    best = max(distribution.values())
+    modes = [key for key, value in distribution.items() if abs(value - best) <= PRE_RUN_EXACT_TOLERANCE]
+    return modes[0] if len(modes) == 1 else None
+
+
+def expected_support(circuit_id):
+    """Return the set of outcomes with positive expected probability."""
+    return {key for key, value in circuits.expected_distribution(circuit_id).items() if value > 0}
+
+
+def expected_marginal(circuit_id):
+    """Return the expected P(c_b = 1) for the T4 bit, as a float."""
+    bit = T4_BIT[circuit_id]
+    return sum(value for key, value in circuits.expected_distribution(circuit_id).items()
+               if key[len(key) - 1 - bit] == "1")
+
+
+def seed_slots(circuit_ids=None, applicability=None, rq4_seeds=RQ4_EXTRA_SEEDS):
+    """Return every seed slot name in the fixed order ``make_seeds.py`` must fill.
+
+    The defaults describe the study; other arguments describe a synthetic
+    study used only by the harness tests.
+    """
+    circuit_ids = circuits.CIRCUIT_IDS if circuit_ids is None else tuple(circuit_ids)
+    applicability = APPLICABILITY if applicability is None else applicability
+    slots = []
+    for circuit_id in circuit_ids:
+        for suite in SEEDED_SUITES:
+            if suite in applicability[circuit_id]:
+                slots.append(f"primary/{circuit_id}/{suite}")
+    for circuit_id in circuit_ids:
+        for suite in SAMPLING_SUITES:
+            if suite in applicability[circuit_id]:
+                slots.extend(f"rq4/{circuit_id}/{suite}/{k:02d}" for k in range(1, rq4_seeds + 1))
+    slots.extend(f"oracle/{circuit_id}" for circuit_id in circuit_ids)
+    slots.extend(f"pre_run/{circuit_id}" for circuit_id in circuit_ids)
+    for analysis in ANALYSES:
+        for fault_set in FAULT_SETS:
+            for statistic in POOLED_STATISTICS:
+                slots.append(f"permutation/{analysis}/{fault_set}/{statistic}")
+    return tuple(slots)

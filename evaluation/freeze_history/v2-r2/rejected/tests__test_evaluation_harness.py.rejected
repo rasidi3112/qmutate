@@ -1,0 +1,1865 @@
+"""Harness tests for the Phase 6A evaluation infrastructure.
+
+These tests use synthetic circuits and synthetic data only. They never run a
+T1-T6 suite on a study circuit, never sample a study circuit, and never
+create ``evaluation/seeds.json`` or any file under ``evaluation/results``.
+"""
+
+import json
+import math
+import sys
+from fractions import Fraction
+from pathlib import Path
+
+import numpy as np
+import pytest
+from qiskit import QuantumCircuit
+from qiskit.circuit import Gate
+
+PROJECT = Path(__file__).resolve().parents[1]
+if str(PROJECT) not in sys.path:
+    sys.path.insert(0, str(PROJECT))
+
+from evaluation import analysis, make_seeds, run_study, study_config, suites
+
+D, U, E = analysis.DETECTED, analysis.UNDETECTED, analysis.ERROR
+
+
+@pytest.fixture(autouse=True)
+def stubbed_freeze_gate(monkeypatch, request):
+    """Stub the mandatory freeze gate for synthetic driver tests; classes with ``real_freeze`` keep it."""
+    if not getattr(request.cls, "real_freeze", False):
+        monkeypatch.setattr(run_study, "_default_freeze_checks", lambda: [("stubbed freeze", True, "")])
+
+
+def counter(start=1):
+    state = {"next": start}
+
+    def randbits(bits):
+        value = state["next"]
+        state["next"] += 7919
+        return value % (2 ** bits)
+
+    return randbits
+
+
+class TestDetectionRate:
+    def test_counts_and_exact_rate(self):
+        record = analysis.detection_rate({"a": D, "b": U, "c": D, "d": U})
+        assert record["rate"] == Fraction(1, 2)
+        assert (record["detected"], record["undetected"], record["errors"]) == (2, 2, 0)
+        assert record["rate_errors_as_undetected"] is None
+
+    def test_errors_leave_the_denominator_and_sensitivity_counts_them(self):
+        record = analysis.detection_rate({"a": D, "b": E, "c": U})
+        assert record["rate"] == Fraction(1, 2)
+        assert record["rate_errors_as_undetected"] == Fraction(1, 3)
+
+    def test_empty_denominators_are_undefined(self):
+        assert analysis.detection_rate({})["rate"] is None
+        assert analysis.detection_rate({"a": E, "b": E})["rate"] is None
+
+    def test_unknown_outcome_rejected(self):
+        with pytest.raises(ValueError):
+            analysis.detection_rate({"a": "killed"})
+
+
+class TestGrouping:
+    def test_pairs_and_singletons_in_lowest_member_order(self):
+        related = {("F2", "F5")}
+        groups, anomalies = analysis.group_components(["F5", "F1", "F2"], lambda a, b: (a, b) in related)
+        assert groups == [("F1",), ("F2", "F5")]
+        assert anomalies == []
+
+    def test_fully_related_triple_is_one_group(self):
+        groups, anomalies = analysis.group_components(["a", "b", "c"], lambda a, b: True)
+        assert groups == [("a", "b", "c")] and anomalies == []
+
+    def test_non_transitive_component_becomes_singletons(self):
+        related = {("a", "b"), ("b", "c")}
+        groups, anomalies = analysis.group_components(["a", "b", "c"], lambda x, y: (x, y) in related)
+        assert groups == [("a",), ("b",), ("c",)]
+        assert anomalies == [("a", "b", "c")]
+
+
+class TestDedupRate:
+    def test_representative_is_lowest_id_and_disagreement_is_reported(self):
+        groups = [("C1-F05", "C1-F07"), ("C1-F01",)]
+        outcomes = {"C1-F05": U, "C1-F07": D, "C1-F01": D}
+        record = analysis.dedup_detection_rate(groups, outcomes)
+        assert record["representatives"] == ["C1-F05", "C1-F01"]
+        assert record["rate"] == Fraction(1, 2)
+        assert record["disagreements"] == [{"group": ["C1-F05", "C1-F07"], "outcomes": {"C1-F05": U, "C1-F07": D}}]
+
+    def test_disagreement_never_changes_the_rate(self):
+        groups = [("x1", "x2"), ("x3",)]
+        agree = analysis.dedup_detection_rate(groups, {"x1": D, "x2": D, "x3": U})
+        disagree = analysis.dedup_detection_rate(groups, {"x1": D, "x2": U, "x3": U})
+        assert agree["rate"] == disagree["rate"] == Fraction(1, 2)
+        assert not agree["disagreements"] and disagree["disagreements"]
+
+    def test_tied_groups_count_once_each(self):
+        groups = [("a", "b"), ("c", "d")]
+        record = analysis.dedup_detection_rate(groups, {"a": D, "b": D, "c": D, "d": D})
+        assert record["groups"] == 2 and record["rate"] == 1
+
+    def test_error_representative_leaves_denominator(self):
+        record = analysis.dedup_detection_rate([("a", "b"), ("c",)], {"a": E, "b": D, "c": D})
+        assert record["rate"] == 1 and record["errors"] == 1
+
+    def test_empty_denominator_is_undefined(self):
+        assert analysis.dedup_detection_rate([("a",)], {"a": E})["rate"] is None
+        assert analysis.dedup_detection_rate([], {})["rate"] is None
+
+
+def pts(*pairs):
+    return [(Fraction(x), Fraction(y)) for x, y in pairs]
+
+
+class TestKendall:
+    def test_known_values(self):
+        counts = analysis.pair_counts(pts((1, 1), (2, 3), (3, 2)))
+        assert (counts["n_c"], counts["n_d"], counts["u_x"], counts["u_y"]) == (2, 1, 3, 3)
+        assert analysis.tau_b(counts)[0] == pytest.approx(1 / 3)
+        assert analysis.tau_b(analysis.pair_counts(pts((1, 3), (2, 2), (3, 1))))[0] == -1
+
+    def test_ties_are_neither_concordant_nor_discordant(self):
+        counts = analysis.pair_counts(pts((1, 1), (1, 2), (2, 3)))
+        assert (counts["n1"], counts["n2"], counts["n_c"], counts["n_d"]) == (1, 0, 2, 0)
+        assert analysis.tau_b(counts)[0] == pytest.approx(2 / math.sqrt(2 * 3))
+
+    @pytest.mark.parametrize("points, reason", [
+        (pts((1, 1)), "fewer than 2 data points"),
+        (pts((1, 1), (1, 2)), "mutation score constant"),
+        (pts((1, 1), (2, 1)), "detection rate constant"),
+        (pts((1, 1), (1, 1)), "mutation score and detection rate constant"),
+    ])
+    def test_undefined_cases(self, points, reason):
+        assert analysis.tau_b(analysis.pair_counts(points)) == (None, reason)
+
+    def test_pooled_includes_constant_circuits_and_def_excludes_them(self):
+        data = {"A": pts((1, 1), (2, 2), (3, 3)), "B": pts((1, 1), (1, 2), (1, 3))}
+        result = analysis.analyze(data)
+        assert result["tau_pooled"]["value"] == pytest.approx(3 / math.sqrt(3 * 6))
+        assert result["tau_pooled_def"]["value"] == pytest.approx(1.0)
+        assert result["per_circuit"]["B"]["in_p"] and not result["per_circuit"]["B"]["in_d"]
+
+    def test_pooled_undefined_when_every_circuit_constant(self):
+        result = analysis.analyze({"A": pts((1, 1), (1, 2)), "B": pts((2, 1), (2, 2))})
+        assert result["tau_pooled"]["value"] is None
+        assert result["tau_pooled"]["undefined_reason"] == "a denominator sum is 0"
+        assert result["tau_pooled_def"]["undefined_reason"] == "no circuit in the set"
+
+    def test_circuits_with_one_point_are_left_out(self):
+        result = analysis.analyze({"A": pts((1, 1)), "B": pts((1, 1), (2, 2))})
+        assert result["left_out"] == ["A"] and result["tau_pooled"]["circuits"] == ["B"]
+
+
+class TestPermutationPValues:
+    def test_exact_p_value_counts_ties_in_upper_tail(self):
+        assert analysis.exact_p_value(pts((1, 1), (2, 2), (3, 3))) == (1, 6, Fraction(1, 6))
+        count, total, p = analysis.exact_p_value(pts((1, 1), (2, 1), (3, 2)))
+        assert total == 6 and count == 2 and p == Fraction(1, 3)
+
+    def test_monte_carlo_is_seeded_and_never_zero(self):
+        data = {"A": pts((1, 1), (2, 2), (3, 3), (4, 4)), "B": pts((1, 2), (2, 1), (3, 3))}
+        first = analysis.monte_carlo_p_value(data, ["A", "B"], seed=11, permutations=200)
+        second = analysis.monte_carlo_p_value(data, ["A", "B"], seed=11, permutations=200)
+        assert first == second
+        b, total, p = first
+        assert total == 200 and p == Fraction(b + 1, 201) and p > 0
+
+    def test_no_p_value_for_undefined_statistic(self):
+        result = analysis.analyze({"A": pts((1, 1), (1, 2))}, {"tau_pooled": 1, "tau_pooled_def": 2}, 10)
+        assert "p_value" not in result["tau_pooled"] and "p_value" not in result["tau_pooled_def"]
+
+
+class TestHypothesisRules:
+    def test_h1_rules(self):
+        good = {c: pts((1, 1), (2, 2)) for c in "ABCD"}
+        assert analysis.h1_status(analysis.analyze(good)) == "supported"
+        three = {c: pts((1, 1), (2, 2)) for c in "ABC"}
+        assert analysis.h1_status(analysis.analyze(three)) == "not supported"
+        assert analysis.h1_status(analysis.analyze({"A": pts((1, 1), (1, 2))})) == "undecidable"
+
+    def test_h3_and_h4_rules(self):
+        small = Fraction(1, 20)
+        assert analysis.h3_status({"A": small, "B": small, "C": small, "D": -small}) == "supported"
+        assert analysis.h3_status({"A": small, "B": small, "C": small, "D": None}) == "undecidable"
+        assert analysis.h3_status({c: Fraction(1, 2) for c in "ABCD"}) == "not supported"
+        assert analysis.h4_status({"A": small, "B": Fraction(1, 10)}) == "supported"
+        assert analysis.h4_status({"A": small, "B": None}) == "undecidable"
+        assert analysis.h4_status({"A": Fraction(1, 5), "B": None}) == "not supported"
+
+    def test_dedup_inputs_cannot_change_h1_or_primary(self):
+        primary = {c: pts((1, 1), (2, 2), (3, 3)) for c in "ABCD"}
+        seeds = {"tau_pooled": 5, "tau_pooled_def": 6}
+        one = analysis.fault_set_statistics(primary, {c: pts((1, 3), (2, 2), (3, 1)) for c in "ABCD"},
+                                            primary, seeds, seeds, 50)
+        two = analysis.fault_set_statistics(primary, {c: pts((1, 1), (2, 1)) for c in "AB"}, {}, seeds, seeds, 50)
+        assert one["primary"] == two["primary"] and one["h1"] == two["h1"] == "supported"
+        assert one["dedup_sensitivity"]["analysis"] != two["dedup_sensitivity"]["analysis"]
+        assert one["dedup_sensitivity"]["affects_h1"] is False
+
+
+def bell():
+    circuit = QuantumCircuit(2, 2)
+    circuit.h(0)
+    circuit.cx(0, 1)
+    circuit.measure(0, 0)
+    circuit.measure(1, 1)
+    return circuit
+
+
+def fixed_counts(counts):
+    return lambda circuit, shots, seed: dict(counts)
+
+
+def oracle(suite, monkeypatch=None, counts=None, expected=None, state=None, clbits=1, bit=0, shots=100):
+    if counts is not None:
+        monkeypatch.setattr(suites, "sample_counts", fixed_counts(counts))
+    return suites.make_oracle(suite, expected_distribution=expected or {"1": Fraction(1)},
+                              expected_state=state if state is not None else np.array([0, 1], dtype=complex),
+                              num_clbits=clbits, t4_bit=bit, seed=3, shots=shots)
+
+
+class TestSuitesOnSyntheticCircuits:
+    def test_t1_passes_and_turns_execution_errors_into_failures(self):
+        check = oracle("T1", clbits=2, shots=16)
+        check(bell())
+        broken = QuantumCircuit(1, 2)
+        broken.append(Gate("opaque_synthetic", 1, []), [0])
+        broken.measure(0, 0)
+        with pytest.raises(AssertionError, match="execution failed"):
+            check(broken)
+
+    def test_t2_requires_a_unique_maximum(self, monkeypatch):
+        check = oracle("T2", monkeypatch, counts={"0": 5, "1": 5}, expected={"1": Fraction(1)}, shots=10)
+        with pytest.raises(AssertionError):
+            check(QuantumCircuit(1, 1))
+        oracle("T2", monkeypatch, counts={"0": 4, "1": 6}, shots=10)(QuantumCircuit(1, 1))
+
+    def test_t3_support(self, monkeypatch):
+        expected = {"00": Fraction(1, 2), "11": Fraction(1, 2)}
+        oracle("T3", monkeypatch, counts={"00": 3, "11": 7}, expected=expected, clbits=2, shots=10)(bell())
+        with pytest.raises(AssertionError):
+            oracle("T3", monkeypatch, counts={"00": 3, "01": 1, "11": 6}, expected=expected, clbits=2, shots=10)(bell())
+
+    def test_t4_exact_boundary(self, monkeypatch):
+        expected = {"0": Fraction(1, 2), "1": Fraction(1, 2)}
+        oracle("T4", monkeypatch, counts={"0": 45, "1": 55}, expected=expected)(QuantumCircuit(1, 1))
+        with pytest.raises(AssertionError):
+            oracle("T4", monkeypatch, counts={"0": 44, "1": 56}, expected=expected)(QuantumCircuit(1, 1))
+
+    def test_t5_exact_boundary(self, monkeypatch):
+        expected = {"0": Fraction(1, 2), "1": Fraction(1, 2)}
+        oracle("T5", monkeypatch, counts={"0": 45, "1": 55}, expected=expected)(QuantumCircuit(1, 1))
+        with pytest.raises(AssertionError):
+            oracle("T5", monkeypatch, counts={"0": 44, "1": 56}, expected=expected)(QuantumCircuit(1, 1))
+
+    def test_t6_ignores_global_phase_and_measurements(self):
+        state = np.array([1, 0, 0, 1], dtype=complex) / math.sqrt(2)
+        check = oracle("T6", state=state, clbits=2)
+        circuit = bell()
+        circuit.global_phase = 0.7
+        check(circuit)
+        wrong = QuantumCircuit(2, 2)
+        wrong.h(0)
+        wrong.measure(0, 0)
+        with pytest.raises(AssertionError):
+            check(wrong)
+
+
+class TestSeeds:
+    def test_study_slots(self):
+        slots = study_config.seed_slots()
+        assert len(slots) == len(set(slots)) == 404
+        assert slots[0] == "primary/C1/T1" and slots[-1] == "permutation/dedup_sensitivity/without_missing_gate/tau_pooled_def"
+
+    def test_document_is_deterministic_given_the_generator(self):
+        slots = study_config.seed_slots()
+        first = make_seeds.serialize(make_seeds.seed_document(slots, 3, counter()))
+        second = make_seeds.serialize(make_seeds.seed_document(slots, 3, counter()))
+        assert first == second
+
+    def test_write_refuses_to_overwrite(self, tmp_path):
+        path = tmp_path / "seeds.json"
+        make_seeds.write_seeds(path, ["a", "b"], 3, counter())
+        before = path.read_bytes()
+        with pytest.raises(FileExistsError):
+            make_seeds.write_seeds(path, ["a", "b"], 3, counter(99))
+        assert path.read_bytes() == before
+        assert make_seeds.load_seeds(path, ["a", "b"], 3) == {"a": 1, "b": 7920}
+
+    @pytest.mark.parametrize("mutate, message", [
+        (lambda d: d.update(protocol_revision=2), "revision"),
+        (lambda d: d["seeds"].reverse(), "order"),
+        (lambda d: d["seeds"][0].update(seed=-1), "integer"),
+        (lambda d: d["seeds"][0].update(seed=2 ** 63), "integer"),
+        (lambda d: d["seeds"][0].update(seed=True), "integer"),
+    ])
+    def test_load_rejects_invalid_files(self, tmp_path, mutate, message):
+        document = make_seeds.seed_document(["a", "b"], 3, counter())
+        mutate(document)
+        path = tmp_path / "seeds.json"
+        path.write_text(json.dumps(document))
+        with pytest.raises(ValueError, match=message):
+            make_seeds.load_seeds(path, ["a", "b"], 3)
+
+
+def synthetic_paths(tmp_path):
+    results = tmp_path / "results"
+    return run_study.Paths(project=tmp_path, results_dir=results, seeds_file=tmp_path / "seeds.json",
+                           protected=(tmp_path / "preflight", tmp_path / "seeds.json", results / "run-locked.json"))
+
+
+class TestOutputProtection:
+    def test_study_paths(self):
+        assert run_study.check_output_path("evaluation/preflight/x.json", run_study.DEFAULT_PATHS)
+        assert run_study.check_output_path("evaluation/seeds.json", run_study.DEFAULT_PATHS)
+        assert run_study.check_output_path("evaluation/manifest.json", run_study.DEFAULT_PATHS)
+        assert run_study.check_output_path("evaluation/results/sub/x.json", run_study.DEFAULT_PATHS)
+        assert run_study.check_output_path("evaluation/results/x.txt", run_study.DEFAULT_PATHS)
+
+    def test_new_file_accepted_existing_and_protected_refused(self, tmp_path):
+        paths = synthetic_paths(tmp_path)
+        assert run_study.check_output_path(paths.results_dir / "run-x.json", paths) == []
+        assert run_study.check_output_path(paths.results_dir / "run-locked.json", paths)
+        assert run_study.check_output_path(tmp_path / "preflight" / "run-x.json", paths)
+        assert run_study.check_output_path(tmp_path / "elsewhere.json", paths)
+
+    def test_write_is_exclusive(self, tmp_path):
+        paths = synthetic_paths(tmp_path)
+        target = paths.results_dir / "run-x.json"
+        run_study.write_results(target, b"first\n", paths)
+        with pytest.raises(FileExistsError):
+            run_study.write_results(target, b"second\n", paths)
+        assert target.read_bytes() == b"first\n"
+
+
+def passing():
+    return [("ok", True, "")]
+
+
+class TestIntegrity:
+    def test_refuses_on_each_failing_check(self, tmp_path):
+        paths = synthetic_paths(tmp_path)
+        spec = synthetic_spec()
+        out = paths.results_dir / "run-x.json"
+        failures = run_study.integrity_failures(out, spec, paths, lambda: [("x", False, "")], lambda: [("y", False, "")])
+        assert "catalogue: x" in failures and "protocol: y" in failures
+        assert "seeds: seed file does not exist" in failures
+        make_seeds.write_seeds(paths.seeds_file, ["wrong"], study_config.PROTOCOL_REVISION, counter())
+        failures = run_study.integrity_failures(out, spec, paths, passing, passing)
+        assert failures and failures[0].startswith("seeds:")
+
+    def test_passes_when_everything_holds(self, tmp_path):
+        paths = synthetic_paths(tmp_path)
+        spec = synthetic_spec()
+        make_seeds.write_seeds(paths.seeds_file, spec.slots(), study_config.PROTOCOL_REVISION, counter())
+        assert run_study.integrity_failures(paths.results_dir / "run-x.json", spec, paths, passing, passing) == []
+        existing = paths.results_dir / "run-x.json"
+        run_study.write_results(existing, b"x", paths)
+        assert run_study.integrity_failures(existing, spec, paths, passing, passing) == [
+            "output: output already exists; results are never overwritten"]
+
+    def test_main_refuses_without_seeds_and_writes_nothing(self, tmp_path, capsys):
+        paths = synthetic_paths(tmp_path)
+        assert run_study.main(["--out", str(paths.results_dir / "run-x.json")], paths=paths) == 2
+        assert not paths.results_dir.exists()
+        assert "refusing to start" in capsys.readouterr().out
+
+
+def circuit_from(n, m, ops):
+    circuit = QuantumCircuit(n, m)
+    for name, *args in ops:
+        getattr(circuit, name)(*args)
+    return circuit
+
+
+S1_OPS = [("h", 0), ("cx", 0, 1), ("measure", 0, 0), ("measure", 1, 1)]
+S2_OPS = [("x", 0), ("measure", 0, 0)]
+
+
+def opaque_fault():
+    circuit = QuantumCircuit(1, 1)
+    circuit.append(Gate("opaque_synthetic", 1, []), [0])
+    circuit.measure(0, 0)
+    return circuit
+
+
+def broken_build():
+    raise RuntimeError("synthetic build failure")
+
+
+def synthetic_spec(**overrides):
+    circuits_ = (
+        run_study.CircuitSpec("S1", lambda: circuit_from(2, 2, S1_OPS), {"00": Fraction(1, 2), "11": Fraction(1, 2)},
+                              np.array([1, 0, 0, 1], dtype=complex) / math.sqrt(2), 2,
+                              ("T1", "T3", "T4", "T5", "T6"), 0),
+        run_study.CircuitSpec("S2", lambda: circuit_from(1, 1, S2_OPS), {"1": Fraction(1)},
+                              np.array([0, 1], dtype=complex), 1, ("T1", "T2", "T3", "T4", "T5", "T6"), 0),
+    )
+    faults_ = (
+        run_study.FaultSpec("S1-F01", "S1", True, lambda: circuit_from(2, 2, [S1_OPS[0]] + S1_OPS[2:]), "D-NOT-EQUIVALENT"),
+        run_study.FaultSpec("S1-F02", "S1", False, lambda: circuit_from(2, 2, [("h", 0), ("cx", 1, 0)] + S1_OPS[2:]),
+                            "D-NOT-EQUIVALENT"),
+        run_study.FaultSpec("S1-F03", "S1", False, lambda: circuit_from(2, 2, [("h", 0), ("z", 0)] + S1_OPS[1:]),
+                            "D-EQUIVALENT"),
+        run_study.FaultSpec("S1-F04", "S1", False,
+                            lambda: circuit_from(2, 2, [("h", 0), ("cx", 0, 1), ("measure", 0, 0), ("measure", 1, 0)]),
+                            "D-NOT-EQUIVALENT"),
+        run_study.FaultSpec("S1-F05", "S1", False,
+                            lambda: circuit_from(2, 2, [("h", 0), ("reset", 1), ("cx", 0, 1)] + S1_OPS[2:]),
+                            "D-UNKNOWN"),
+        run_study.FaultSpec("S2-F01", "S2", True, lambda: circuit_from(1, 1, [("measure", 0, 0)]), "D-NOT-EQUIVALENT"),
+        run_study.FaultSpec("S2-F02", "S2", False, lambda: circuit_from(1, 1, [("h", 0), ("measure", 0, 0)]),
+                            "D-NOT-EQUIVALENT"),
+        run_study.FaultSpec("S2-F03", "S2", False, broken_build, "D-NOT-EQUIVALENT"),
+        run_study.FaultSpec("S2-F04", "S2", False, opaque_fault, "D-NOT-EQUIVALENT"),
+    )
+    values = dict(circuits=circuits_, faults=faults_, shots={"T1": 4, "T2": 20, "T3": 10, "T4": 40, "T5": 80},
+                  pre_run_shots=2000, permutations=30, rq4_seeds=2, oracle_target=0.4)
+    values.update(overrides)
+    return run_study.StudySpec(**values)
+
+
+def synthetic_seeds(spec):
+    randbits = counter(12345)
+    return {slot: randbits(63) for slot in spec.slots()}
+
+
+@pytest.fixture(scope="module")
+def synthetic_result():
+    spec = synthetic_spec()
+    return run_study.run(spec, synthetic_seeds(spec))
+
+
+class TestSyntheticPipeline:
+    def test_repeated_runs_are_byte_identical(self, synthetic_result, tmp_path):
+        spec = synthetic_spec()
+        again = run_study.run(spec, synthetic_seeds(spec))
+        first = run_study.to_json_bytes(synthetic_result)
+        assert first == run_study.to_json_bytes(again)
+        paths = synthetic_paths(tmp_path)
+        run_study.write_results(paths.results_dir / "run-a.json", first, paths)
+        run_study.write_results(paths.results_dir / "run-b.json", run_study.to_json_bytes(again), paths)
+        assert (paths.results_dir / "run-a.json").read_bytes() == (paths.results_dir / "run-b.json").read_bytes()
+
+    def test_classification_handles_invalid_unknown_and_equivalent(self, synthetic_result):
+        classes = synthetic_result["fault_classification"]
+        assert classes["S2-F03"]["class"] == "Invalid" and classes["S2-F03"]["invalid_stage"] == "build"
+        assert classes["S2-F04"]["class"] == "Invalid" and classes["S2-F04"]["invalid_stage"] == "execution"
+        assert classes["S1-F05"]["class"] == "D-UNKNOWN" and classes["S1-F05"]["ideal_reason"] == "reset"
+        assert classes["S1-F03"]["class"] == "D-EQUIVALENT"
+        assert all(classes[f]["unitary_reason"] == "measurement" for f in ("S1-F01", "S1-F02", "S2-F01"))
+        kinds = {(d["kind"], d.get("fault")) for d in synthetic_result["deviations"]}
+        assert {("fault classification", "S2-F03"), ("fault classification", "S2-F04"),
+                ("fault classification", "S1-F05")} <= kinds
+
+    def test_groups_require_same_map_and_state(self, synthetic_result):
+        groups = synthetic_result["behaviour_groups"]["S1"]
+        assert groups["all"]["groups"] == [["S1-F01", "S1-F02"], ["S1-F04"]]
+        assert groups["all"]["t6_groups"] == [["S1-F01", "S1-F02"], ["S1-F04"]]
+        assert groups["without_missing_gate"]["groups"] == [["S1-F02"], ["S1-F04"]]
+
+    def test_only_d_not_equivalent_faults_are_run_and_outcomes_are_raw(self, synthetic_result):
+        entry = synthetic_result["suites"]["S1"]["T6"]
+        assert sorted(entry["faults"]) == ["S1-F01", "S1-F02", "S1-F04"]
+        assert entry["faults"]["S1-F04"] == {"outcome": U, "error_type": None}
+        assert all({"index", "name", "outcome", "ideal", "unitary"} <= set(m) for m in entry["mutants"])
+        assert isinstance(entry["scores"]["adjusted_score"], (Fraction, type(None)))
+
+    def test_dedup_excludes_t1_and_is_separate_from_primary(self, synthetic_result):
+        stats = synthetic_result["statistics"]["all"]
+        assert "dedup" not in stats["detection_rates"]["S1/T1"]
+        assert "dedup" in stats["detection_rates"]["S1/T6"]
+        assert set(stats) == {"primary", "h1", "dedup_sensitivity", "detection_rates"}
+        assert stats["dedup_sensitivity"]["affects_h1"] is False
+        assert synthetic_result["hypotheses"]["dedup_sensitivity_affects_h1"] is False
+
+    def test_execution_order_and_seeds_recorded(self, synthetic_result):
+        stages = [step["stage"] for step in synthetic_result["execution_order"]]
+        assert stages.index("behaviour_groups") < stages.index("original_suite")
+        assert stages[-1] == "statistics"
+        spec = synthetic_spec()
+        seeds = synthetic_seeds(spec)
+        assert synthetic_result["suites"]["S2"]["T2"]["seed"] == seeds["primary/S2/T2"]
+        assert synthetic_result["suites"]["S2"]["T6"]["seed"] is None
+        assert [r["seed"] for r in synthetic_result["rq4"]["S2/T2"]["runs"]] == [seeds["rq4/S2/T2/01"], seeds["rq4/S2/T2/02"]]
+
+    def test_fractions_serialized_exactly(self, synthetic_result):
+        document = json.loads(run_study.to_json_bytes(synthetic_result))
+        score = document["suites"]["S2"]["T6"]["scores"]["adjusted_score"]
+        assert score is None or "/" in score
+
+    def test_pre_run_only_stops_before_suites(self):
+        spec = synthetic_spec()
+        body = run_study.run(spec, synthetic_seeds(spec), pre_run_only=True)
+        assert body["mode"] == "pre_run_checks" and "suites" not in body
+        assert all(record["passed"] for record in body["pre_run"].values())
+
+    def test_failed_pre_run_check_stops_the_study(self):
+        wrong = run_study.CircuitSpec("S2", lambda: circuit_from(1, 1, S2_OPS), {"0": Fraction(1)},
+                                      np.array([1, 0], dtype=complex), 1, ("T1", "T6"), 0)
+        spec = synthetic_spec(circuits=(wrong,), faults=())
+        body = run_study.run(spec, synthetic_seeds(spec))
+        assert body["stopped"] and "suites" not in body
+
+
+def selective_factory(fail_original=None, error_fault=None):
+    def factory(spec, circuit_spec, suite, seed):
+        real = suites.make_oracle(suite, expected_distribution=circuit_spec.expected_distribution,
+                                  expected_state=circuit_spec.expected_state, num_clbits=circuit_spec.num_clbits,
+                                  t4_bit=circuit_spec.t4_bit, seed=seed, shots=spec.shots.get(suite))
+
+        def wrapped(circuit):
+            if (circuit_spec.circuit_id, suite) == fail_original:
+                raise AssertionError("synthetic failure on every circuit")
+            if error_fault and suite == error_fault[1] and circuit.num_qubits == 1 and circuit.data and \
+                    circuit.data[0].operation.name == "h":
+                raise RuntimeError("synthetic error")
+            return real(circuit)
+
+        return wrapped
+
+    return factory
+
+
+class TestSyntheticFailureHandling:
+    def test_invalid_original_suite_is_excluded(self):
+        spec = synthetic_spec(oracle_factory=selective_factory(fail_original=("S2", "T5")))
+        body = run_study.run(spec, synthetic_seeds(spec))
+        entry = body["suites"]["S2"]["T5"]
+        assert entry["excluded"] and entry["original"]["status"] == "fail" and "faults" not in entry
+        assert {"kind": "invalid original suite", "circuit": "S2", "suite": "T5", "status": "fail",
+                "error_type": None} in body["deviations"]
+        assert body["rq4"]["S2/T5"]["skipped"] and body["rq3"]["S2"]["delta_c"] is None
+        assert "S2/T5" not in body["statistics"]["all"]["detection_rates"]
+
+    def test_fault_error_is_recorded_and_leaves_the_denominator(self):
+        spec = synthetic_spec(oracle_factory=selective_factory(error_fault=("S2", "T6")))
+        body = run_study.run(spec, synthetic_seeds(spec))
+        outcome = body["suites"]["S2"]["T6"]["faults"]["S2-F02"]
+        assert outcome == {"outcome": E, "error_type": "RuntimeError"}
+        rate = body["statistics"]["all"]["detection_rates"]["S2/T6"]["primary"]
+        assert rate["errors"] == 1 and rate["rate"] == Fraction(rate["detected"], rate["faults"] - 1)
+        assert rate["rate_errors_as_undetected"] == Fraction(rate["detected"], rate["faults"])
+
+
+class TestStudySpecStructure:
+    def test_study_spec_matches_frozen_catalogue_without_running_it(self):
+        spec = run_study.study_spec()
+        assert [c.circuit_id for c in spec.circuits] == ["C1", "C2", "C3", "C4", "C5", "C6"]
+        assert len(spec.faults) == 70 and spec.slots() == study_config.seed_slots()
+        assert all(sum(c.expected_distribution.values()) == 1 for c in spec.circuits)
+        assert all(isinstance(v, Fraction) for c in spec.circuits for v in c.expected_distribution.values())
+        assert spec.dedup_suites == ("T2", "T3", "T4", "T5", "T6")
+
+
+def total_variation(p, q):
+    return 0.5 * float(np.sum(np.abs(p - q)))
+
+
+def random_state(rng, size):
+    vector = rng.normal(size=size) + 1j * rng.normal(size=size)
+    return vector / np.linalg.norm(vector)
+
+
+class TestT6Derivation:
+    def test_lower_and_upper_bounds_hold_for_every_phase(self):
+        rng = np.random.default_rng(20261027)
+        for size in (2, 4, 8, 16, 32):
+            for scale in (1e-9, 1e-6, 1e-3, 1.0):
+                for _ in range(40):
+                    u = random_state(rng, size)
+                    v = u + scale * (rng.normal(size=size) + 1j * rng.normal(size=size))
+                    v = np.exp(1j * rng.uniform(0, 2 * np.pi)) * v / np.linalg.norm(v)
+                    tv = total_variation(np.abs(u) ** 2, np.abs(v) ** 2)
+                    phases = list(rng.uniform(0, 2 * np.pi, size=5))
+                    overlap = np.vdot(v, u)
+                    phases.append(float(np.angle(overlap)))
+                    for theta in phases:
+                        difference = float(np.max(np.abs(u - np.exp(1j * theta) * v)))
+                        assert difference >= tv / math.sqrt(size) - 1e-15
+                        assert tv <= math.sqrt(size) * difference + 1e-15
+                    assert suites.state_difference(u, v) >= tv / math.sqrt(size) - 1e-15
+
+    def test_measurement_maps_can_only_lower_total_variation(self):
+        rng = np.random.default_rng(7)
+        for _ in range(200):
+            size = int(rng.choice([4, 8, 16, 32]))
+            u, v = random_state(rng, size), random_state(rng, size)
+            outcome = rng.integers(0, max(2, size // 2), size=size)
+            pu = np.bincount(outcome, weights=np.abs(u) ** 2, minlength=size)
+            pv = np.bincount(outcome, weights=np.abs(v) ** 2, minlength=size)
+            assert total_variation(pu, pv) <= total_variation(np.abs(u) ** 2, np.abs(v) ** 2) + 1e-15
+
+    def test_lower_bound_is_tight_to_first_order(self):
+        epsilon = 1e-4
+        u = np.array([math.cos(math.pi / 4 + epsilon), math.sin(math.pi / 4 + epsilon)], dtype=complex)
+        v = np.array([math.cos(math.pi / 4), math.sin(math.pi / 4)], dtype=complex)
+        tv = total_variation(np.abs(u) ** 2, np.abs(v) ** 2)
+        ratio = suites.state_difference(u, v) / (tv / math.sqrt(2))
+        assert 1.0 <= ratio < 1.001
+
+
+def one_qubit_ry(theta):
+    circuit = QuantumCircuit(1, 1)
+    circuit.ry(theta, 0)
+    circuit.measure(0, 0)
+    return circuit
+
+
+class TestT6Condition:
+    def test_condition_is_strict_and_needs_the_original_map(self):
+        spec = synthetic_spec()
+        bound = run_study.t6_group_bound(spec, 1)
+        assert bound == pytest.approx(math.sqrt(2) * (1e-8 + 1e-12) + 1e-10)
+        assert not run_study.t6_condition(spec, 1, True, [bound])
+        assert run_study.t6_condition(spec, 1, True, [bound * (1 + 1e-6), 0.5])
+        assert not run_study.t6_condition(spec, 1, False, [0.5, 0.5])
+        assert not run_study.t6_condition(spec, 1, True, [0.5, None])
+
+    def test_fault_just_above_the_bound_is_detected_by_t6(self):
+        from qmutate import EquivalenceModel, check_equivalence
+
+        spec = synthetic_spec()
+        bound = run_study.t6_group_bound(spec, 1)
+        original = one_qubit_ry(math.pi / 2)
+        expected_state = np.array([1, 1], dtype=complex) / math.sqrt(2)
+        assert suites.state_difference(suites.measurement_free_state(original), expected_state) <= 1e-12
+        t6 = suites.make_oracle("T6", expected_distribution={"0": Fraction(1, 2), "1": Fraction(1, 2)},
+                                expected_state=expected_state, num_clbits=1, t4_bit=0, seed=None, shots=None)
+        t6(original)
+        delta = 3 * bound
+        fault = one_qubit_ry(math.pi / 2 + delta)
+        tv = check_equivalence(original, fault, model=EquivalenceModel.IDEAL_DISTRIBUTION).total_variation
+        assert bound < tv < 2 * bound
+        assert run_study.t6_condition(spec, 1, True, [tv])
+        with pytest.raises(AssertionError):
+            t6(fault)
+        below = check_equivalence(original, one_qubit_ry(math.pi / 2 + bound),
+                                  model=EquivalenceModel.IDEAL_DISTRIBUTION).total_variation
+        assert not run_study.t6_condition(spec, 1, True, [below])
+
+    def test_measurement_mapping_fault_shows_why_the_map_condition_is_needed(self):
+        state = np.array([1, 0, 0, 1], dtype=complex) / math.sqrt(2)
+        t6 = suites.make_oracle("T6", expected_distribution={"00": Fraction(1, 2), "11": Fraction(1, 2)},
+                                expected_state=state, num_clbits=2, t4_bit=0, seed=None, shots=None)
+        remapped = circuit_from(2, 2, [("h", 0), ("cx", 0, 1), ("measure", 0, 0), ("measure", 1, 0)])
+        t6(remapped)
+
+
+class FailingExecution:
+    def __init__(self, minimum_instructions):
+        self.minimum = minimum_instructions
+
+    def __call__(self):
+        return self
+
+    def run(self, circuit, **options):
+        from qiskit.providers.basic_provider import BasicSimulator
+        from qiskit.providers.basic_provider.exceptions import BasicProviderError
+
+        if len(circuit.data) < self.minimum:
+            raise BasicProviderError("synthetic execution failure")
+        return BasicSimulator().run(circuit, **options)
+
+
+class TestT1Semantics:
+    def t1(self):
+        return suites.make_oracle("T1", expected_distribution={"00": Fraction(1, 2), "11": Fraction(1, 2)},
+                                  expected_state=None, num_clbits=2, t4_bit=0, seed=5, shots=16)
+
+    def test_mutant_execution_failure_is_killed_not_error(self, monkeypatch):
+        from qmutate import MutantOutcome, run_removal_mutants
+
+        original = bell()
+        monkeypatch.setattr(suites, "BasicSimulator", FailingExecution(len(original.data)))
+        report = run_removal_mutants(original, self.t1())
+        generated = [r for r in report.results if r.outcome is not MutantOutcome.NOT_RUN]
+        assert generated and all(r.outcome is MutantOutcome.KILLED and r.error_type is None for r in generated)
+        assert report.errors == 0
+
+    def test_original_execution_failure_invalidates_t1(self, monkeypatch):
+        from qmutate import BaselineFailedError, run_removal_mutants
+
+        monkeypatch.setattr(suites, "BasicSimulator", FailingExecution(10 ** 6))
+        with pytest.raises(BaselineFailedError):
+            run_removal_mutants(bell(), self.t1())
+        spec = synthetic_spec()
+        body = run_study.run(spec, synthetic_seeds(spec))
+        for circuit_id in ("S1", "S2"):
+            entry = body["suites"][circuit_id]["T1"]
+            assert entry["excluded"] and entry["original"] == {"status": "fail", "error_type": None}
+            assert {"kind": "invalid original suite", "circuit": circuit_id, "suite": "T1", "status": "fail",
+                    "error_type": None} in body["deviations"]
+            assert not body["suites"][circuit_id]["T6"]["excluded"]
+        assert body["fault_classification"]["S1-F01"]["class"] == "D-NOT-EQUIVALENT"
+
+    def test_pre_run_execution_failure_is_a_failed_check(self):
+        broken = run_study.CircuitSpec("S9", opaque_fault, {"0": Fraction(1)}, np.array([1, 0], dtype=complex), 1,
+                                       ("T1", "T6"), 0)
+        spec = synthetic_spec(circuits=(broken,), faults=())
+        body = run_study.run(spec, synthetic_seeds(spec))
+        record = body["pre_run"]["S9"]
+        assert record["passed"] is False and record["error_type"]
+        assert body["stopped"] and "suites" not in body
+
+
+def protected_hashes():
+    import hashlib
+
+    files = sorted(p for p in (PROJECT / "evaluation").rglob("*") if p.is_file() and "__pycache__" not in p.parts)
+    return {str(p.relative_to(PROJECT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
+
+
+class TestAuditIntegrity:
+    def test_synthetic_runs_write_nothing_and_leave_evidence_unchanged(self):
+        seeds = PROJECT / "evaluation" / "seeds.json"
+        results = PROJECT / "evaluation" / "results"
+        existed = (seeds.exists(), results.exists())
+        before = protected_hashes()
+        spec = synthetic_spec()
+        run_study.run(spec, synthetic_seeds(spec), pre_run_only=True)
+        run_study.run(spec, synthetic_seeds(spec))
+        assert protected_hashes() == before
+        assert (seeds.exists(), results.exists()) == existed
+
+    def test_execution_order_follows_the_protocol(self, synthetic_result):
+        import re
+
+        letters = {"pre_run": "p", "classify_fault": "c", "behaviour_groups": "g", "original_suite": "o",
+                   "removal_mutants": "m", "fault": "f", "rq3_oracle": "r", "rq4": "q", "statistics": "s"}
+        sequence = "".join(letters[step["stage"]] for step in synthetic_result["execution_order"])
+        assert re.fullmatch(r"p+c+g+(om?f*)+r+q+s+", sequence), sequence
+
+    def test_seed_slot_breakdown(self):
+        from collections import Counter
+
+        kinds = Counter(slot.split("/")[0] for slot in study_config.seed_slots())
+        assert dict(kinds) == {"primary": 24, "rq4": 360, "oracle": 6, "pre_run": 6, "permutation": 8}
+
+    def study_paths(self, tmp_path):
+        defaults = run_study.DEFAULT_PATHS
+        return run_study.Paths(project=defaults.project, results_dir=tmp_path / "results",
+                               seeds_file=tmp_path / "seeds.json", protected=defaults.protected)
+
+    def test_main_writes_byte_identical_files_for_identical_results(self, tmp_path, monkeypatch):
+        paths = self.study_paths(tmp_path)
+        make_seeds.write_seeds(paths.seeds_file, study_config.seed_slots(), study_config.PROTOCOL_REVISION, counter())
+        monkeypatch.setattr(run_study, "run", lambda spec, seeds, pre_run_only=False: {"stopped": None, "mode": "x"})
+        assert run_study.main(["--out", str(paths.results_dir / "run-a.json")], paths=paths) == 0
+        assert run_study.main(["--out", str(paths.results_dir / "run-b.json")], paths=paths) == 0
+        first = (paths.results_dir / "run-a.json").read_bytes()
+        assert first == (paths.results_dir / "run-b.json").read_bytes()
+        metadata = json.loads(first)["metadata"]
+        assert metadata["protocol_revision"] == study_config.PROTOCOL_REVISION
+        assert len(metadata["protocol_sha256"]) == len(metadata["catalogue_sha256"]) == 64
+        assert run_study.main(["--out", str(paths.results_dir / "run-a.json")], paths=paths) == 2
+        assert (paths.results_dir / "run-a.json").read_bytes() == first
+
+    def test_main_refuses_to_write_if_integrity_changes_during_the_run(self, tmp_path, monkeypatch):
+        paths = self.study_paths(tmp_path)
+        make_seeds.write_seeds(paths.seeds_file, study_config.seed_slots(), study_config.PROTOCOL_REVISION, counter())
+
+        def tampering_run(spec, seeds, pre_run_only=False):
+            document = json.loads(paths.seeds_file.read_text())
+            document["seeds"][0]["seed"] += 1
+            paths.seeds_file.write_text(json.dumps(document))
+            return {"stopped": None}
+
+        monkeypatch.setattr(run_study, "run", tampering_run)
+        assert run_study.main(["--out", str(paths.results_dir / "run-a.json")], paths=paths) == 4
+        assert not (paths.results_dir / "run-a.json").exists()
+
+
+class TestReviewGaps:
+    def test_output_names_are_tied_to_the_mode(self, tmp_path):
+        paths = synthetic_paths(tmp_path)
+        assert run_study.check_output_path(paths.results_dir / "run-a.json", paths, "full") == []
+        assert run_study.check_output_path(paths.results_dir / "pre-run-a.json", paths, "pre_run_checks") == []
+        assert run_study.check_output_path(paths.results_dir / "pre-run-a.json", paths, "full")
+        assert run_study.check_output_path(paths.results_dir / "run-a.json", paths, "pre_run_checks")
+        assert run_study.check_output_path(paths.results_dir / ".run-a.json.partial", paths, "full")
+
+    def test_atomic_write_leaves_no_partial_file(self, tmp_path):
+        paths = synthetic_paths(tmp_path)
+        target = paths.results_dir / "run-a.json"
+        run_study.write_results(target, b"complete\n", paths)
+        assert sorted(p.name for p in paths.results_dir.iterdir()) == ["run-a.json"]
+
+    def test_failed_link_leaves_no_output_and_keeps_the_partial_as_evidence(self, tmp_path, monkeypatch):
+        paths = synthetic_paths(tmp_path)
+
+        def failing_link(source, destination):
+            raise OSError("synthetic link failure")
+
+        monkeypatch.setattr(run_study.os, "link", failing_link)
+        with pytest.raises(OSError):
+            run_study.write_results(paths.results_dir / "run-a.json", b"data\n", paths)
+        assert [p.name for p in paths.results_dir.iterdir()] == [".run-a.json.partial"]
+        monkeypatch.undo()
+        with pytest.raises(FileExistsError, match="leftover partial file"):
+            run_study.write_results(paths.results_dir / "run-a.json", b"other\n", paths)
+        assert (paths.results_dir / ".run-a.json.partial").read_bytes() == b"data\n"
+        assert not (paths.results_dir / "run-a.json").exists()
+
+    def test_metadata_hashes_cover_harness_qmutate_and_tests(self):
+        recorded = run_study.code_hashes(run_study.DEFAULT_PATHS)
+        for name in ("evaluation/run_study.py", "evaluation/suites.py", "evaluation/analysis.py",
+                     "evaluation/study_config.py", "evaluation/preflight/catalogue.py", "src/qmutate/runner.py",
+                     "src/qmutate/sampling.py", "tests/test_evaluation_harness.py", "evaluation/CATALOGUE_FREEZE.md",
+                     "pyproject.toml"):
+            assert name in recorded and len(recorded[name]) == 64
+
+    def test_post_run_check_detects_a_code_change(self, tmp_path, monkeypatch):
+        paths = TestAuditIntegrity().study_paths(tmp_path)
+        make_seeds.write_seeds(paths.seeds_file, study_config.seed_slots(), study_config.PROTOCOL_REVISION, counter())
+        watched = tmp_path / "watched.py"
+        watched.write_text("x = 1\n")
+        real = run_study.code_files
+        monkeypatch.setattr(run_study, "code_files", lambda p: real(p) + [watched])
+        monkeypatch.setattr(run_study, "code_hashes",
+                            lambda p: {str(f): run_study.sha256_file(f) for f in run_study.code_files(p)})
+
+        def editing_run(spec, seeds, pre_run_only=False):
+            watched.write_text("x = 2\n")
+            return {"stopped": None}
+
+        monkeypatch.setattr(run_study, "run", editing_run)
+        assert run_study.main(["--out", str(paths.results_dir / "run-a.json")], paths=paths) == 4
+        assert not paths.results_dir.exists() or not any(paths.results_dir.iterdir())
+
+    def test_pre_run_output_is_labelled_and_needs_its_own_name(self, tmp_path, monkeypatch):
+        paths = TestAuditIntegrity().study_paths(tmp_path)
+        make_seeds.write_seeds(paths.seeds_file, study_config.seed_slots(), study_config.PROTOCOL_REVISION, counter())
+        monkeypatch.setattr(run_study, "run", lambda spec, seeds, pre_run_only=False:
+                            {"stopped": None, "mode": "pre_run_checks" if pre_run_only else "full"})
+        assert run_study.main(["--pre-run-checks", "--out", str(paths.results_dir / "run-a.json")], paths=paths) == 2
+        assert run_study.main(["--pre-run-checks", "--out", str(paths.results_dir / "pre-run-a.json")],
+                              paths=paths) == 0
+        document = json.loads((paths.results_dir / "pre-run-a.json").read_bytes())
+        assert document["metadata"]["mode"] == document["mode"] == "pre_run_checks"
+
+    def test_stopped_pre_run_exits_three_and_is_recorded(self, tmp_path, monkeypatch):
+        paths = TestAuditIntegrity().study_paths(tmp_path)
+        make_seeds.write_seeds(paths.seeds_file, study_config.seed_slots(), study_config.PROTOCOL_REVISION, counter())
+        monkeypatch.setattr(run_study, "run", lambda spec, seeds, pre_run_only=False:
+                            {"stopped": "pre-run checks failed for ['C1']", "mode": "pre_run_checks"})
+        assert run_study.main(["--pre-run-checks", "--out", str(paths.results_dir / "pre-run-a.json")],
+                              paths=paths) == 3
+        assert json.loads((paths.results_dir / "pre-run-a.json").read_bytes())["stopped"]
+
+    def test_matched_suite_baseline_has_no_p_values(self):
+        points = {c: pts((1, 1), (2, 2), (3, 3)) for c in "AB"}
+        seeds = {"tau_pooled": 1, "tau_pooled_def": 2}
+        result = analysis.fault_set_statistics(points, points, points, seeds, seeds, 20)
+        baseline = result["dedup_sensitivity"]["matched_suite_baseline"]
+        assert all("p_value" not in row for row in baseline["per_circuit"].values())
+        assert "p_value" not in baseline["tau_pooled"] and "p_value" not in baseline["tau_pooled_def"]
+        assert "p_value" in result["dedup_sensitivity"]["analysis"]["tau_pooled"]
+
+    def test_suite_constants_come_from_study_config(self):
+        assert suites.T4_TOLERANCE == study_config.T4_TOLERANCE == Fraction(1, 20)
+        assert suites.T5_TOLERANCE == study_config.T5_TOLERANCE == Fraction(1, 20)
+        assert suites.STATE_ATOL == study_config.T6_ATOL == run_study.study_spec().t6_atol
+
+
+class TestQmutateSource:
+    def test_study_imports_project_qmutate(self):
+        assert run_study.qmutate_location() == (PROJECT / "src" / "qmutate").resolve()
+
+    def test_refuses_a_qmutate_imported_from_elsewhere(self, tmp_path, monkeypatch):
+        paths = synthetic_paths(tmp_path)
+        spec = synthetic_spec()
+        make_seeds.write_seeds(paths.seeds_file, spec.slots(), study_config.PROTOCOL_REVISION, counter())
+        monkeypatch.setattr(run_study, "qmutate_location", lambda: tmp_path / "site-packages" / "qmutate")
+        failures = run_study.integrity_failures(paths.results_dir / "run-x.json", spec, paths, passing, passing)
+        assert failures == ["qmutate: imported from outside src/qmutate; run with PYTHONPATH=src"]
+
+
+class TestCodeFreezeChecker:
+    def test_coverage_includes_every_imported_project_module(self):
+        from evaluation import check_code_freeze
+
+        covered = set(check_code_freeze.file_hashes())
+        imported = set(check_code_freeze.imported_project_modules())
+        assert imported and imported <= covered
+        for name in ("evaluation/run_study.py", "evaluation/preflight/catalogue.py", "src/qmutate/sampling.py",
+                     "evaluation/PROTOCOL.md", "evaluation/protocol.lock.json", "evaluation/manifest.json",
+                     "pyproject.toml", "tests/test_evaluation_harness.py", "evaluation/check_code_freeze.py"):
+            assert name in covered
+
+    def test_detects_changed_added_and_removed_files(self, tmp_path, monkeypatch):
+        from evaluation import check_code_freeze
+
+        monkeypatch.setenv("VECLIB_MAXIMUM_THREADS", "1")
+        for relative in check_code_freeze.file_hashes():
+            target = tmp_path / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((PROJECT / relative).read_bytes())
+        environment = check_code_freeze.environment()
+        freeze = {"files_sha256": check_code_freeze.file_hashes(tmp_path),
+                  "parameters": check_code_freeze.parameters(),
+                  "environments": {f"qiskit-{environment['qiskit']}": environment}}
+        clean = {name: passed for name, passed, _ in check_code_freeze.manifest_checks(freeze, tmp_path)}
+        assert all(clean.values())
+        (tmp_path / "evaluation/suites.py").write_text("changed\n")
+        (tmp_path / "evaluation/new_module.py").write_text("x = 1\n")
+        (tmp_path / "pyproject.toml").unlink()
+        results = {name: (passed, detail)
+                   for name, passed, detail in check_code_freeze.manifest_checks(freeze, tmp_path)}
+        assert results["every covered file hash unchanged"] == (False, ["evaluation/suites.py"])
+        passed, detail = results["covered file set unchanged (no file added or removed)"]
+        assert not passed and detail == {"added": ["evaluation/new_module.py"], "removed": ["pyproject.toml"]}
+
+    def test_parameters_match_the_study_spec(self):
+        from evaluation import check_code_freeze
+
+        values = check_code_freeze.parameters()
+        assert values["study_spec_matches_config"] is True
+        assert values["seed_slot_count"] == 404 and values["PROTOCOL_REVISION"] == study_config.PROTOCOL_REVISION
+
+
+def frozen_copy(tmp_path, status="approved"):
+    from evaluation import check_code_freeze
+
+    for relative in check_code_freeze.file_hashes():
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((PROJECT / relative).read_bytes())
+    environment = check_code_freeze.environment()
+    data = check_code_freeze._serialize(
+        check_code_freeze.build_freeze({f"qiskit-{environment['qiskit']}": environment}, tmp_path))
+    (tmp_path / check_code_freeze.FREEZE_FILE).write_bytes(data)
+    lock = {"manifest": check_code_freeze.FREEZE_FILE, "sha256": check_code_freeze.sha256_bytes(data),
+            "status": status}
+    (tmp_path / check_code_freeze.LOCK_FILE).write_bytes(check_code_freeze._serialize(lock))
+    return tmp_path
+
+
+def failed_names(results):
+    return {name for name, passed, _ in results if not passed}
+
+
+class TestCodeFreezeGate:
+    real_freeze = True
+
+    @pytest.fixture(autouse=True)
+    def thread_setting(self, monkeypatch):
+        monkeypatch.setenv("VECLIB_MAXIMUM_THREADS", "1")
+
+    def test_approved_untouched_copy_verifies(self, tmp_path):
+        from evaluation import check_code_freeze
+
+        root = frozen_copy(tmp_path)
+        assert failed_names(check_code_freeze.verify(root, require_approved=True)) == set()
+
+    def test_fails_closed_on_every_kind_of_deviation(self, tmp_path, monkeypatch):
+        from evaluation import check_code_freeze
+
+        root = frozen_copy(tmp_path)
+        (root / "evaluation/PROTOCOL.md").write_text("altered\n")
+        assert "every covered file hash unchanged" in failed_names(check_code_freeze.verify(root, True))
+        root = frozen_copy(tmp_path / "removed")
+        (root / "evaluation/suites.py").unlink()
+        assert "covered file set unchanged (no file added or removed)" in failed_names(check_code_freeze.verify(root, True))
+        root = frozen_copy(tmp_path / "added")
+        (root / "evaluation/extra.py").write_text("x = 1\n")
+        assert "covered file set unchanged (no file added or removed)" in failed_names(check_code_freeze.verify(root, True))
+        root = frozen_copy(tmp_path / "manifest")
+        manifest = root / check_code_freeze.FREEZE_FILE
+        manifest.write_bytes(manifest.read_bytes().replace(b"phase6a-catalogue-v1", b"phase6a-catalogue-v2"))
+        assert "manifest SHA-256 equals the lock" in failed_names(check_code_freeze.verify(root, True))
+        root = frozen_copy(tmp_path / "proposed", status="proposed")
+        assert failed_names(check_code_freeze.verify(root, True)) == {"code freeze approved"}
+        root = frozen_copy(tmp_path / "missing")
+        (root / check_code_freeze.LOCK_FILE).unlink()
+        assert "code freeze lock exists" in failed_names(check_code_freeze.verify(root, True))
+        root = frozen_copy(tmp_path / "seeds")
+        (root / check_code_freeze.SEEDS_FILE).write_text("{}\n")
+        assert "seeds file and seeds lock both exist" in failed_names(check_code_freeze.verify(root, True))
+
+    def test_fails_without_thread_setting_or_with_changed_parameters(self, tmp_path, monkeypatch):
+        from evaluation import check_code_freeze
+
+        root = frozen_copy(tmp_path)
+        monkeypatch.delenv("VECLIB_MAXIMUM_THREADS")
+        failures = failed_names(check_code_freeze.verify(root, True))
+        assert "required environment variables set" in failures
+        monkeypatch.setenv("VECLIB_MAXIMUM_THREADS", "1")
+        real = check_code_freeze.parameters
+        monkeypatch.setattr(check_code_freeze, "parameters", lambda: dict(real(), PERMUTATIONS=99))
+        assert "runtime parameters equal the freeze" in failed_names(check_code_freeze.verify(root, True))
+
+    def test_driver_refuses_an_altered_protected_file(self, tmp_path, monkeypatch, capsys):
+        from evaluation import check_code_freeze
+
+        root = frozen_copy(tmp_path / "project")
+        (root / "evaluation/run_study.py").write_text("altered\n")
+        monkeypatch.setattr(run_study, "_default_freeze_checks", lambda: check_code_freeze.verify(root, True))
+        paths = synthetic_paths(tmp_path)
+        spec = synthetic_spec()
+        make_seeds.write_seeds(paths.seeds_file, spec.slots(), study_config.PROTOCOL_REVISION, counter())
+        failures = run_study.integrity_failures(paths.results_dir / "run-x.json", spec, paths, passing, passing)
+        assert "freeze: every covered file hash unchanged" in failures
+        study = TestAuditIntegrity().study_paths(tmp_path / "study")
+        assert run_study.main(["--out", str(study.results_dir / "run-a.json")], paths=study) == 2
+        assert not study.results_dir.exists()
+        assert "freeze: every covered file hash unchanged" in capsys.readouterr().out
+
+    def test_default_gate_is_used_by_main_and_fails_closed_on_exceptions(self, tmp_path, monkeypatch, capsys):
+        from evaluation import check_code_freeze
+
+        def broken(*args, **kwargs):
+            raise RuntimeError("synthetic checker failure")
+
+        monkeypatch.setattr(check_code_freeze, "verify", broken)
+        assert run_study._default_freeze_checks()[0][1] is False
+        study = TestAuditIntegrity().study_paths(tmp_path)
+        assert run_study.main(["--out", str(study.results_dir / "run-a.json")], paths=study) == 2
+        assert "code freeze check raised RuntimeError" in capsys.readouterr().out
+
+    def test_make_seeds_refuses_without_an_approved_freeze(self, tmp_path, monkeypatch, capsys):
+        real_files = (PROJECT / "evaluation" / "seeds.json", PROJECT / "evaluation" / "seeds.lock.json")
+
+        def snapshot():
+            return tuple(path.read_bytes() if path.exists() else None for path in real_files)
+
+        before = snapshot()
+        calls = []
+
+        def recording_write(path, slots, revision, *args, **kwargs):
+            calls.append(Path(path))
+            return "0" * 64
+
+        monkeypatch.setattr(make_seeds, "PROJECT", tmp_path)
+        monkeypatch.setattr(make_seeds, "write_seeds", recording_write)
+        refusal = "refusing: the code freeze is not approved or does not verify"
+        assert make_seeds.main(freeze_checks=lambda: [("code freeze approved", False, "")]) == 1
+        assert refusal in capsys.readouterr().out
+        assert make_seeds.main(freeze_checks=lambda: []) == 1
+        assert refusal in capsys.readouterr().out
+        assert calls == []
+        assert not (tmp_path / "evaluation" / "seeds.json").exists()
+        assert make_seeds.main(freeze_checks=lambda: [("code freeze approved", True, "")]) == 0
+        assert calls == [tmp_path / "evaluation" / "seeds.json"]
+        assert snapshot() == before
+
+    def test_manifest_and_locks_are_never_output_targets(self, tmp_path):
+        from evaluation import check_code_freeze
+
+        for name in ("evaluation/code_freeze.json", "evaluation/code_freeze.lock.json", "evaluation/seeds.lock.json"):
+            assert name in study_config.PROTECTED_PATHS
+            assert run_study.check_output_path(name, run_study.DEFAULT_PATHS)
+            with pytest.raises(FileExistsError):
+                run_study.write_results(name, b"x", run_study.DEFAULT_PATHS)
+        inside = run_study.Paths(project=tmp_path, results_dir=tmp_path, seeds_file=tmp_path / "s.json",
+                                 protected=(tmp_path / "run-freeze.json",))
+        (tmp_path / "run-freeze.json").write_text("manifest\n")
+        assert run_study.check_output_path(tmp_path / "run-freeze.json", inside)
+        root = frozen_copy(tmp_path / "write")
+        before = (root / check_code_freeze.FREEZE_FILE).read_bytes()
+        assert check_code_freeze.main(["--write"], root=root) == 1
+        assert (root / check_code_freeze.FREEZE_FILE).read_bytes() == before
+
+
+class TestThreadSettingDeterminism:
+    def test_synthetic_pipeline_is_byte_identical_across_processes(self):
+        import subprocess
+
+        script = (
+            "import hashlib, importlib.util, os, sys\n"
+            f"sys.path.insert(0, {str(PROJECT)!r})\n"
+            f"spec = importlib.util.spec_from_file_location('harness', {str(Path(__file__).resolve())!r})\n"
+            "harness = importlib.util.module_from_spec(spec)\n"
+            "spec.loader.exec_module(harness)\n"
+            "study = harness.synthetic_spec()\n"
+            "body = harness.run_study.run(study, harness.synthetic_seeds(study))\n"
+            "print(os.environ.get('VECLIB_MAXIMUM_THREADS'), hashlib.sha256(harness.run_study.to_json_bytes(body)).hexdigest())\n"
+        )
+        environment = dict(__import__("os").environ, VECLIB_MAXIMUM_THREADS="1", PYTHONDONTWRITEBYTECODE="1",
+                           PYTHONPATH=str(PROJECT / "src"))
+        outputs = [subprocess.run([sys.executable, "-c", script], env=environment, capture_output=True, text=True,
+                                  check=True).stdout.split() for _ in range(2)]
+        assert outputs[0] == outputs[1]
+        assert outputs[0][0] == "1" and len(outputs[0][1]) == 64
+
+
+class TestPreRunRecordCompleteness:
+    def test_raw_counts_and_seed_are_recorded_and_consistent(self, synthetic_result):
+        from qmutate import sample_counts
+
+        spec = synthetic_spec()
+        seeds = synthetic_seeds(spec)
+        for circuit_spec in spec.circuits:
+            record = synthetic_result["pre_run"][circuit_spec.circuit_id]
+            slot = f"pre_run/{circuit_spec.circuit_id}"
+            assert record["d_seed_slot"] == slot and record["d_seed"] == seeds[slot]
+            counts = record["d_counts"]
+            assert sum(counts.values()) == record["d_shots"] == spec.pre_run_shots
+            assert all(type(value) is int and value > 0 for value in counts.values())
+            assert all(len(key) == circuit_spec.num_clbits and set(key) <= {"0", "1"} for key in counts)
+            assert counts == sample_counts(circuit_spec.build(), shots=spec.pre_run_shots, seed=seeds[slot])
+            expected = circuit_spec.expected_distribution
+            assert record["d_outcomes_outside_support"] == sorted(k for k in counts if k not in expected)
+            distance = sum((abs(Fraction(counts.get(k, 0), spec.pre_run_shots) - expected.get(k, Fraction(0)))
+                            for k in set(counts) | set(expected)), Fraction(0)) / 2
+            assert record["d_total_variation"] == distance
+            assert {"a_sums_exactly_to_one", "b_largest_difference", "b_state_difference", "c_largest_difference",
+                    "d_shots", "d_outcomes_outside_support", "d_total_variation", "d_epsilon", "passed"} <= set(record)
+
+    def test_execution_check_seed_is_recorded_for_every_use(self, synthetic_result):
+        spec = synthetic_spec()
+        seeds = synthetic_seeds(spec)
+        classes = synthetic_result["fault_classification"]
+        for fault_spec in spec.faults:
+            record = classes[fault_spec.fault_id]
+            slot = f"pre_run/{fault_spec.circuit_id}"
+            if record.get("invalid_stage") == "build":
+                assert "execution_check" not in record
+            else:
+                assert record["execution_check"] == {"seed_slot": slot, "seed": seeds[slot],
+                                                     "shots": spec.fault_check_shots}
+        assert classes["S2-F04"]["invalid_stage"] == "execution" and "execution_check" in classes["S2-F04"]
+        assert classes["S2-F03"]["invalid_stage"] == "build" and "execution_check" not in classes["S2-F03"]
+
+    def test_failed_pre_run_check_still_records_its_seed(self):
+        broken = run_study.CircuitSpec("S9", opaque_fault, {"0": Fraction(1)}, np.array([1, 0], dtype=complex), 1,
+                                       ("T1", "T6"), 0)
+        spec = synthetic_spec(circuits=(broken,), faults=())
+        seeds = synthetic_seeds(spec)
+        record = run_study.run(spec, seeds)["pre_run"]["S9"]
+        assert record["passed"] is False and record["error_type"]
+        assert record["d_seed_slot"] == "pre_run/S9" and record["d_seed"] == seeds["pre_run/S9"]
+
+    def test_counts_stay_in_the_pre_run_record_only(self, synthetic_result):
+        document = json.loads(run_study.to_json_bytes(synthetic_result))
+        for section, value in document.items():
+            if section != "pre_run":
+                assert '"d_counts"' not in json.dumps(value)
+        assert all("d_counts" in record for record in document["pre_run"].values())
+
+
+def seeded_freeze_copy(tmp_path, status="approved"):
+    from evaluation import check_code_freeze as freeze
+
+    root = frozen_copy(tmp_path, status=status)
+    seeds = root / freeze.SEEDS_FILE
+    make_seeds.write_seeds(seeds, study_config.seed_slots(), 6, counter())
+    manifest = (root / freeze.FREEZE_FILE).read_bytes()
+    (root / freeze.SEEDS_LOCK_FILE).write_bytes(freeze._serialize({
+        "seeds_sha256": freeze.sha256_bytes(seeds.read_bytes()),
+        "seed_slot_schema_sha256": json.loads(manifest)["parameters"]["seed_slot_schema_sha256"],
+        "code_freeze_sha256": freeze.sha256_bytes(manifest),
+    }))
+    return root
+
+
+def archive_original(root, history, relative="evaluation/suites.py"):
+    from evaluation import check_code_freeze as freeze
+
+    archive = root / history
+    archive.mkdir(parents=True, exist_ok=True)
+    original = archive / freeze.archive_name(relative, freeze.ORIGINAL_SUFFIX)
+    if not original.exists():
+        original.write_bytes((root / relative).read_bytes())
+    return original
+
+
+def change_and_propose(root, history="evaluation/freeze_history/v1"):
+    from evaluation import check_code_freeze as freeze
+
+    archive_original(root, history)
+    target = root / "evaluation/suites.py"
+    target.write_bytes(target.read_bytes() + b"\n")
+    assert freeze.main(["--retire", history], root=root) == 0
+    assert freeze.main(["--write"], root=root) == 0
+    return history
+
+
+def rebound_copy(tmp_path, approve=False):
+    """Return ``(root, history, outgoing)`` for a seeded copy re-frozen to a proposed, re-bound freeze."""
+    from evaluation import check_code_freeze as freeze
+
+    root = seeded_freeze_copy(tmp_path)
+    outgoing = file_bytes(root, *TestRefreezeWithExistingSeeds.live)
+    history = change_and_propose(root)
+    assert freeze.main(["--rebind-seeds", history], root=root) == 0
+    if approve:
+        assert freeze.main(["--approve"], root=root) == 0
+    return root, history, outgoing
+
+
+def preserve_rejected_versions(root, history):
+    from evaluation import check_code_freeze as freeze
+
+    rejected = root / history / freeze.REJECTED_DIR
+    rejected.mkdir(parents=True, exist_ok=True)
+    proposed = json.loads((root / freeze.FREEZE_FILE).read_text())["files_sha256"]
+    outgoing = json.loads((root / history / "code_freeze.json").read_text())["files_sha256"]
+    for relative, digest in proposed.items():
+        if outgoing.get(relative) != digest:
+            (rejected / freeze.archive_name(relative, freeze.REJECTED_SUFFIX)).write_bytes((root / relative).read_bytes())
+
+
+@pytest.fixture
+def freeze_environments(monkeypatch):
+    """Require only the running Qiskit version at approval; a synthetic copy records one environment."""
+    import qiskit
+    from evaluation import check_code_freeze
+
+    monkeypatch.setenv("VECLIB_MAXIMUM_THREADS", "1")
+    monkeypatch.setattr(check_code_freeze, "REQUIRED_QISKIT_VERSIONS", (qiskit.__version__,))
+
+
+def file_bytes(root, *names):
+    return {name: (root / name).read_bytes() if (root / name).exists() else None for name in names}
+
+
+class TestRefreezeWithExistingSeeds:
+    real_freeze = True
+    live = ("evaluation/seeds.json", "evaluation/seeds.lock.json", "evaluation/code_freeze.json",
+            "evaluation/code_freeze.lock.json")
+
+    @pytest.fixture(autouse=True)
+    def thread_setting(self, freeze_environments):
+        pass
+
+    def test_success_keeps_seeds_and_binds_the_new_manifest(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        assert failed_names(freeze.verify(root, True)) == set()
+        before = file_bytes(root, *self.live)
+        history = change_and_propose(root)
+        assert freeze.pending_rebind(root)
+        assert freeze.main(["--rebind-seeds", history], root=root) == 0
+        archive = root / history
+        assert (root / freeze.SEEDS_FILE).read_bytes() == before["evaluation/seeds.json"]
+        assert (archive / "seeds.lock.json").read_bytes() == before["evaluation/seeds.lock.json"]
+        assert (archive / "code_freeze.json").read_bytes() == before["evaluation/code_freeze.json"]
+        assert (archive / "code_freeze.lock.json").read_bytes() == before["evaluation/code_freeze.lock.json"]
+        manifest = (root / freeze.FREEZE_FILE).read_bytes()
+        new_lock = json.loads((root / freeze.SEEDS_LOCK_FILE).read_text())
+        assert new_lock == {"seeds_sha256": freeze.sha256_bytes(before["evaluation/seeds.json"]),
+                            "seed_slot_schema_sha256": json.loads(manifest)["parameters"]["seed_slot_schema_sha256"],
+                            "code_freeze_sha256": freeze.sha256_bytes(manifest)}
+        record = json.loads((archive / freeze.REBIND_RECORD).read_text())
+        assert record["previous_seeds_lock_sha256"] == freeze.sha256_bytes(before["evaluation/seeds.lock.json"])
+        assert record["previous_code_freeze_sha256"] == freeze.sha256_bytes(before["evaluation/code_freeze.json"])
+        assert record["new_code_freeze_sha256"] == freeze.sha256_bytes(manifest)
+        assert failed_names(freeze.verify(root)) == set()
+        assert failed_names(freeze.verify(root, True)) == {"code freeze approved"}
+        assert freeze.main(["--approve"], root=root) == 0
+        assert failed_names(freeze.verify(root, True)) == set()
+        assert (root / freeze.SEEDS_FILE).read_bytes() == before["evaluation/seeds.json"]
+
+    def test_refuses_when_seeds_changed(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        history = change_and_propose(root)
+        seeds = root / freeze.SEEDS_FILE
+        document = json.loads(seeds.read_text())
+        document["seeds"][0]["seed"] += 1
+        seeds.write_bytes(make_seeds.serialize(document))
+        lock_before = (root / freeze.SEEDS_LOCK_FILE).read_bytes()
+        assert freeze.main(["--rebind-seeds", history], root=root) == 1
+        assert not (root / history / "seeds.lock.json").exists()
+        assert (root / freeze.SEEDS_LOCK_FILE).read_bytes() == lock_before
+
+    @pytest.mark.parametrize("corrupt", ["malformed", "extra_field", "schema", "unbound_manifest"])
+    def test_refuses_an_invalid_existing_seeds_lock(self, tmp_path, corrupt):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        history = change_and_propose(root)
+        lock_path = root / freeze.SEEDS_LOCK_FILE
+        lock = json.loads(lock_path.read_text())
+        if corrupt == "malformed":
+            lock_path.write_text("{not json\n")
+        elif corrupt == "extra_field":
+            lock_path.write_bytes(freeze._serialize(dict(lock, note="x")))
+        elif corrupt == "schema":
+            lock_path.write_bytes(freeze._serialize(dict(lock, seed_slot_schema_sha256="0" * 64)))
+        else:
+            lock_path.write_bytes(freeze._serialize(dict(lock, code_freeze_sha256="f" * 64)))
+        before = lock_path.read_bytes()
+        assert freeze.main(["--rebind-seeds", history], root=root) == 1
+        assert lock_path.read_bytes() == before
+        assert not (root / history / "seeds.lock.json").exists()
+
+    def test_refuses_unless_the_freeze_is_proposed(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        (root / "evaluation/freeze_history/v1").mkdir(parents=True)
+        before = file_bytes(root, *self.live)
+        assert freeze.main(["--rebind-seeds", "evaluation/freeze_history/v1"], root=root) == 1
+        assert file_bytes(root, *self.live) == before
+        history = change_and_propose(root, "evaluation/freeze_history/v2")
+        assert freeze.main(["--rebind-seeds", history], root=root) == 0
+        assert freeze.main(["--approve"], root=root) == 0
+        approved = file_bytes(root, *self.live)
+        assert freeze.main(["--rebind-seeds", history], root=root) == 1
+        assert file_bytes(root, *self.live) == approved
+
+    def test_never_overwrites_archives_or_approved_artefacts(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        occupied = root / "evaluation/freeze_history/v1"
+        occupied.mkdir(parents=True)
+        (occupied / "code_freeze.json").write_text('{"note": "someone else\'s manifest"}\n')
+        before = file_bytes(root, *self.live)
+        assert freeze.main(["--retire", "evaluation/freeze_history/v1"], root=root) == 1
+        assert file_bytes(root, *self.live) == before
+        history = change_and_propose(root, "evaluation/freeze_history/v2")
+        (root / history / "seeds.lock.json").write_text("different archived lock\n")
+        lock_before = (root / freeze.SEEDS_LOCK_FILE).read_bytes()
+        assert freeze.main(["--rebind-seeds", history], root=root) == 1
+        assert (root / freeze.SEEDS_LOCK_FILE).read_bytes() == lock_before
+        (root / history / "seeds.lock.json").unlink()
+        (root / history / ".seeds.lock.json.partial").write_text("leftover\n")
+        assert freeze.main(["--rebind-seeds", history], root=root) == 1
+        assert (root / freeze.SEEDS_LOCK_FILE).read_bytes() == lock_before
+        assert freeze.main(["--retire", "evaluation/elsewhere"], root=root) == 1
+
+    def test_requires_the_retired_freeze_to_be_approved(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path, status="proposed")
+        history = change_and_propose(root)
+        lock_before = (root / freeze.SEEDS_LOCK_FILE).read_bytes()
+        assert freeze.main(["--rebind-seeds", history], root=root) == 1
+        assert (root / freeze.SEEDS_LOCK_FILE).read_bytes() == lock_before
+
+    def test_interrupted_rebind_fails_closed_and_resumes(self, tmp_path, monkeypatch):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        history = change_and_propose(root)
+        seeds_before = (root / freeze.SEEDS_FILE).read_bytes()
+
+        def crash(path, data):
+            raise OSError("synthetic crash before the replacement")
+
+        monkeypatch.setattr(freeze, "_replace", crash)
+        with pytest.raises(OSError):
+            freeze.main(["--rebind-seeds", history], root=root)
+        assert (root / history / "seeds.lock.json").is_file() and (root / history / freeze.REBIND_RECORD).is_file()
+        assert "seeds lock matches seeds.json, slot schema and manifest" in failed_names(freeze.verify(root))
+        monkeypatch.undo()
+        monkeypatch.setenv("VECLIB_MAXIMUM_THREADS", "1")
+        assert freeze.main(["--rebind-seeds", history], root=root) == 0
+        assert freeze.main(["--rebind-seeds", history], root=root) == 0
+        assert failed_names(freeze.verify(root)) == set()
+        assert (root / freeze.SEEDS_FILE).read_bytes() == seeds_before
+
+    def test_interrupted_retire_fails_closed_and_resumes(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        history = root / "evaluation/freeze_history/v1"
+        manifest, lock = (root / freeze.FREEZE_FILE).read_bytes(), (root / freeze.LOCK_FILE).read_bytes()
+        assert freeze.main(["--retire", "evaluation/freeze_history/v1"], root=root) == 0
+        (root / freeze.FREEZE_FILE).write_bytes(manifest)
+        assert "code freeze lock exists" in failed_names(freeze.verify(root))
+        assert freeze.main(["--retire", "evaluation/freeze_history/v1"], root=root) == 0
+        assert not (root / freeze.FREEZE_FILE).exists()
+        (root / freeze.FREEZE_FILE).write_bytes(manifest)
+        (root / freeze.LOCK_FILE).write_bytes(lock)
+        assert freeze.main(["--retire", "evaluation/freeze_history/v1"], root=root) == 0
+        assert (history / "code_freeze.json").read_bytes() == manifest and (history / "code_freeze.lock.json").read_bytes() == lock
+        assert freeze.main(["--retire", "evaluation/freeze_history/v1"], root=root) == 0
+
+    def test_add_environment_refuses_once_seeds_are_rebound(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        history = change_and_propose(root)
+        assert freeze.main(["--add-environment"], root=root) == 0
+        assert freeze.main(["--rebind-seeds", history], root=root) == 0
+        manifest = (root / freeze.FREEZE_FILE).read_bytes()
+        assert freeze.main(["--add-environment"], root=root) == 1
+        assert (root / freeze.FREEZE_FILE).read_bytes() == manifest
+
+    def test_first_binding_still_uses_record_seeds(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = frozen_copy(tmp_path / "first", status="approved")
+        make_seeds.write_seeds(root / freeze.SEEDS_FILE, study_config.seed_slots(), 7, counter())
+        assert freeze.main(["--record-seeds"], root=root) == 0
+        assert failed_names(freeze.verify(root, True)) == set()
+        proposed = frozen_copy(tmp_path / "proposed", status="proposed")
+        make_seeds.write_seeds(proposed / freeze.SEEDS_FILE, study_config.seed_slots(), 7, counter())
+        (proposed / "evaluation/freeze_history/v1").mkdir(parents=True)
+        assert freeze.main(["--rebind-seeds", "evaluation/freeze_history/v1"], root=proposed) == 1
+        assert not (proposed / freeze.SEEDS_LOCK_FILE).exists()
+
+    def test_seed_files_of_revisions_six_to_eight_are_accepted(self, tmp_path):
+        slots = study_config.seed_slots()
+        for revision in (6, 7, 8):
+            path = tmp_path / f"seeds-{revision}.json"
+            make_seeds.write_seeds(path, slots, revision, counter())
+            assert len(make_seeds.load_seeds(path, slots, study_config.SEED_FILE_REVISIONS)) == 404
+        make_seeds.write_seeds(tmp_path / "seeds-5.json", slots, 5, counter())
+        with pytest.raises(ValueError, match="revision"):
+            make_seeds.load_seeds(tmp_path / "seeds-5.json", slots, study_config.SEED_FILE_REVISIONS)
+
+
+def seed_gate_failures(root, tmp_path, monkeypatch):
+    """Return ``(approve exit, make_seeds exit, seeds written, run_study failures)`` for ``root``."""
+    from evaluation import check_code_freeze as freeze
+
+    calls = []
+    real_write = make_seeds.write_seeds
+    gate = tmp_path / "gate"
+    gate.mkdir()
+    paths = synthetic_paths(gate)
+    spec = synthetic_spec()
+    real_write(paths.seeds_file, spec.slots(), study_config.PROTOCOL_REVISION, counter())
+    monkeypatch.setattr(make_seeds, "PROJECT", root)
+    monkeypatch.setattr(make_seeds, "write_seeds", lambda path, *args, **kwargs: calls.append(path) or "0" * 64)
+    seeds_exit = make_seeds.main(freeze_checks=lambda: freeze.verify(root, require_approved=True))
+    driver = run_study.integrity_failures(paths.results_dir / "run-x.json", spec, paths, passing, passing,
+                                          freeze_checks=lambda: freeze.verify(root, require_approved=True))
+    return seeds_exit, calls, driver
+
+
+class TestSeedHistory:
+    real_freeze = True
+    history_check = "seed history matches seeds.json and its lock"
+
+    @pytest.fixture(autouse=True)
+    def environments(self, freeze_environments):
+        pass
+
+    @pytest.mark.parametrize("removed", ["seeds.json", "seeds.lock.json", "both"])
+    def test_removed_seed_artefacts_fail_closed_in_every_gate(self, tmp_path, monkeypatch, removed):
+        from evaluation import check_code_freeze as freeze
+
+        root, history, _ = rebound_copy(tmp_path / "copy", approve=True)
+        assert failed_names(freeze.verify(root, True)) == set()
+        names = {"seeds.json": [freeze.SEEDS_FILE], "seeds.lock.json": [freeze.SEEDS_LOCK_FILE],
+                 "both": [freeze.SEEDS_FILE, freeze.SEEDS_LOCK_FILE]}[removed]
+        for name in names:
+            (root / name).unlink()
+        failures = failed_names(freeze.verify(root, True))
+        assert self.history_check in failures
+        if removed == "both":
+            assert "seeds not generated yet" in failures
+        seeds_exit, calls, driver = seed_gate_failures(root, tmp_path, monkeypatch)
+        assert seeds_exit == 1 and calls == []
+        assert f"freeze: {self.history_check}" in driver
+        lock = root / freeze.LOCK_FILE
+        lock.write_bytes(lock.read_bytes().replace(b'"approved"', b'"proposed"'))
+        before = lock.read_bytes()
+        assert freeze.main(["--approve"], root=root) == 1
+        assert lock.read_bytes() == before
+
+    def test_replaced_seeds_with_a_consistent_lock_are_detected(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root, _, _ = rebound_copy(tmp_path, approve=True)
+        seeds = root / freeze.SEEDS_FILE
+        seeds.unlink()
+        make_seeds.write_seeds(seeds, study_config.seed_slots(), 8, counter(start=5))
+        manifest = (root / freeze.FREEZE_FILE).read_bytes()
+        (root / freeze.SEEDS_LOCK_FILE).write_bytes(freeze._serialize({
+            "seeds_sha256": freeze.sha256_bytes(seeds.read_bytes()),
+            "seed_slot_schema_sha256": json.loads(manifest)["parameters"]["seed_slot_schema_sha256"],
+            "code_freeze_sha256": freeze.sha256_bytes(manifest)}))
+        assert failed_names(freeze.verify(root, True)) == {self.history_check}
+
+    def test_byte_identical_restoration_is_the_legitimate_recovery(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root, _, _ = rebound_copy(tmp_path, approve=True)
+        saved = file_bytes(root, freeze.SEEDS_FILE, freeze.SEEDS_LOCK_FILE)
+        for name in saved:
+            (root / name).unlink()
+        assert self.history_check in failed_names(freeze.verify(root, True))
+        for name, data in saved.items():
+            (root / name).write_bytes(data)
+        assert failed_names(freeze.verify(root, True)) == set()
+
+    def test_first_binding_is_recorded_so_its_removal_is_detected(self, tmp_path, monkeypatch):
+        from evaluation import check_code_freeze as freeze
+
+        root = frozen_copy(tmp_path / "copy", status="approved")
+        make_seeds.write_seeds(root / freeze.SEEDS_FILE, study_config.seed_slots(), 8, counter())
+        assert freeze.main(["--record-seeds"], root=root) == 0
+        record = json.loads((root / freeze.SEEDS_RECORD_FILE).read_text())
+        assert record["seeds_sha256"] == freeze.sha256_bytes((root / freeze.SEEDS_FILE).read_bytes())
+        saved = file_bytes(root, freeze.SEEDS_FILE, freeze.SEEDS_LOCK_FILE)
+        (root / freeze.SEEDS_LOCK_FILE).unlink()
+        assert self.history_check in failed_names(freeze.verify(root, True))
+        assert freeze.main(["--record-seeds"], root=root) == 0
+        assert (root / freeze.SEEDS_LOCK_FILE).read_bytes() == saved[freeze.SEEDS_LOCK_FILE]
+        for name in saved:
+            (root / name).unlink()
+        assert {"seeds not generated yet", self.history_check} <= failed_names(freeze.verify(root, True))
+        seeds_exit, calls, driver = seed_gate_failures(root, tmp_path, monkeypatch)
+        assert seeds_exit == 1 and calls == [] and f"freeze: {self.history_check}" in driver
+        make_seeds.write_seeds(root / freeze.SEEDS_FILE, study_config.seed_slots(), 8, counter(start=3))
+        assert freeze.main(["--record-seeds"], root=root) == 1
+        assert not (root / freeze.SEEDS_LOCK_FILE).exists()
+
+    def test_record_seeds_refuses_once_a_re_freeze_recorded_the_seeds(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root, _, _ = rebound_copy(tmp_path, approve=True)
+        (root / freeze.SEEDS_LOCK_FILE).unlink()
+        assert freeze.main(["--record-seeds"], root=root) == 1
+        assert not (root / freeze.SEEDS_LOCK_FILE).exists()
+
+    def test_unreadable_history_fails_and_failed_evidence_is_ignored(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root, history, _ = rebound_copy(tmp_path, approve=True)
+        failed = root / history / freeze.FAILED_DIR
+        failed.mkdir()
+        (failed / "foreign.json").write_text('{"seeds_sha256": "' + "0" * 64 + '"}\n')
+        (failed / ".seeds.lock.json.partial").write_text("evidence\n")
+        assert failed_names(freeze.verify(root, True)) == set()
+        (root / history / "note.json").write_text("{not json\n")
+        assert failed_names(freeze.verify(root, True)) == {self.history_check}
+
+
+class TestLeftoverPartialFiles:
+    real_freeze = True
+    partial_check = "no leftover partial freeze files"
+
+    @pytest.fixture(autouse=True)
+    def environments(self, freeze_environments):
+        pass
+
+    def test_live_partial_is_refused_kept_and_recovered_through_failed(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        history = change_and_propose(root)
+        partial = root / "evaluation/.seeds.lock.json.partial"
+        partial.write_bytes(b"leftover from a crashed write\n")
+        lock_before = (root / freeze.SEEDS_LOCK_FILE).read_bytes()
+        assert freeze.main(["--rebind-seeds", history], root=root) == 1
+        assert partial.read_bytes() == b"leftover from a crashed write\n"
+        assert (root / freeze.SEEDS_LOCK_FILE).read_bytes() == lock_before
+        assert self.partial_check in failed_names(freeze.verify(root))
+        assert freeze.main(["--approve"], root=root) == 1
+        assert partial.exists()
+        failed = root / history / freeze.FAILED_DIR
+        failed.mkdir()
+        partial.rename(failed / partial.name)
+        assert freeze.main(["--rebind-seeds", history], root=root) == 0
+        assert failed_names(freeze.verify(root)) == set()
+        assert (failed / partial.name).read_bytes() == b"leftover from a crashed write\n"
+
+    def test_replace_refuses_a_leftover_partial_without_removing_it(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        target = tmp_path / "file.json"
+        target.write_bytes(b"old\n")
+        partial = tmp_path / ".file.json.partial"
+        partial.write_bytes(b"leftover\n")
+        with pytest.raises(freeze.RefreezeError, match="leftover partial file"):
+            freeze._replace(target, b"new\n")
+        assert partial.read_bytes() == b"leftover\n" and target.read_bytes() == b"old\n"
+
+    def test_failed_replace_and_publish_keep_their_partial_files(self, tmp_path, monkeypatch):
+        from evaluation import check_code_freeze as freeze
+
+        target = tmp_path / "file.json"
+        target.write_bytes(b"old\n")
+
+        def failing(*args):
+            raise OSError("synthetic failure")
+
+        monkeypatch.setattr(freeze.os, "replace", failing)
+        with pytest.raises(OSError):
+            freeze._replace(target, b"new\n")
+        assert target.read_bytes() == b"old\n"
+        assert (tmp_path / ".file.json.partial").read_bytes() == b"new\n"
+        monkeypatch.setattr(freeze.os, "link", failing)
+        with pytest.raises(OSError):
+            freeze._publish(tmp_path / "archive.json", b"archived\n")
+        assert not (tmp_path / "archive.json").exists()
+        assert (tmp_path / ".archive.json.partial").read_bytes() == b"archived\n"
+        monkeypatch.undo()
+        with pytest.raises(freeze.RefreezeError, match="leftover partial file"):
+            freeze._publish(tmp_path / "archive.json", b"archived\n")
+        assert (tmp_path / ".archive.json.partial").exists()
+
+
+class TestLockValidation:
+    real_freeze = True
+
+    @pytest.fixture(autouse=True)
+    def environments(self, freeze_environments):
+        pass
+
+    @pytest.mark.parametrize("corrupt", ["list", "string", "manifest_field", "extra_field", "missing_field"])
+    def test_malformed_lock_is_a_controlled_failure_everywhere(self, tmp_path, corrupt, capsys):
+        from evaluation import check_code_freeze as freeze
+
+        root, history, _ = rebound_copy(tmp_path)
+        preserve_rejected_versions(root, history)
+        lock_path = root / freeze.LOCK_FILE
+        lock = json.loads(lock_path.read_text())
+        replacement = {
+            "list": b"[]\n",
+            "string": b'"proposed"\n',
+            "manifest_field": freeze._serialize(dict(lock, manifest="evaluation/other.json")),
+            "extra_field": freeze._serialize(dict(lock, note="x")),
+            "missing_field": freeze._serialize({k: v for k, v in lock.items() if k != "manifest"}),
+        }[corrupt]
+        lock_path.write_bytes(replacement)
+        live = file_bytes(root, *TestRefreezeWithExistingSeeds.live)
+        assert failed_names(freeze.verify(root))
+        archive_original(root, "evaluation/freeze_history/v1-r2")
+        for argv in (["--approve"], ["--add-environment"], ["--rebind-seeds", history],
+                     ["--retire", "evaluation/freeze_history/v1-r2"], ["--reject", history]):
+            assert freeze.main(argv, root=root) == 1, argv
+            assert file_bytes(root, *TestRefreezeWithExistingSeeds.live) == live, argv
+        assert "Traceback" not in capsys.readouterr().out
+        assert not (root / history / freeze.REJECTED_DIR / freeze.REJECTION_RECORD).exists()
+
+    def test_manifest_of_the_wrong_shape_is_a_controlled_failure(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = frozen_copy(tmp_path, status="proposed")
+        data = b"[]\n"
+        (root / freeze.FREEZE_FILE).write_bytes(data)
+        (root / freeze.LOCK_FILE).write_bytes(freeze._serialize(
+            {"manifest": freeze.FREEZE_FILE, "sha256": freeze.sha256_bytes(data), "status": "proposed"}))
+        assert "manifest and lock are JSON objects of the expected shape" in failed_names(freeze.verify(root))
+        assert freeze.main(["--approve"], root=root) == 1
+        assert json.loads((root / freeze.LOCK_FILE).read_text())["status"] == "proposed"
+
+    def test_archived_lock_with_a_wrong_manifest_field_is_refused(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        history = change_and_propose(root)
+        archived = root / history / "code_freeze.lock.json"
+        archived.write_bytes(freeze._serialize(dict(json.loads(archived.read_text()), manifest="elsewhere.json")))
+        lock_before = (root / freeze.SEEDS_LOCK_FILE).read_bytes()
+        assert freeze.main(["--rebind-seeds", history], root=root) == 1
+        assert (root / freeze.SEEDS_LOCK_FILE).read_bytes() == lock_before
+
+
+class TestActionsRunAlone:
+    real_freeze = True
+
+    @pytest.fixture(autouse=True)
+    def environments(self, freeze_environments):
+        pass
+
+    def test_write_and_approve_cannot_run_in_one_invocation(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = frozen_copy(tmp_path, status="approved")
+        assert freeze.main(["--retire", "evaluation/freeze_history/v1"], root=root) == 0
+        assert freeze.main(["--write", "--approve"], root=root) == 1
+        assert not (root / freeze.FREEZE_FILE).exists() and not (root / freeze.LOCK_FILE).exists()
+
+    def test_every_combination_and_unknown_argument_is_refused(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = frozen_copy(tmp_path, status="proposed")
+        before = file_bytes(root, freeze.FREEZE_FILE, freeze.LOCK_FILE)
+        history = "evaluation/freeze_history/v1"
+        simple = ["--write", "--add-environment", "--approve", "--record-seeds"]
+        with_history = [["--retire", history], ["--rebind-seeds", history], ["--reject", history]]
+        invocations = [[a, b] for a in simple for b in simple if a != b]
+        invocations += [h + [s] for h in with_history for s in simple] + [[s] + h for h in with_history for s in simple]
+        invocations += [a + b for a in with_history for b in with_history if a != b]
+        invocations += [[s, "--require-approved"] for s in simple] + [["--approve", "--force"], ["--aprove"]]
+        invocations += [["--retire"], ["--reject"], ["--rebind-seeds"], ["--retire", "--write"]]
+        for argv in invocations:
+            assert freeze.main(argv, root=root) == 1, argv
+            assert file_bytes(root, freeze.FREEZE_FILE, freeze.LOCK_FILE) == before, argv
+        assert not (root / history).exists()
+
+    def test_approval_needs_every_protocol_environment(self, tmp_path, monkeypatch):
+        from evaluation import check_code_freeze as freeze
+
+        root = frozen_copy(tmp_path, status="proposed")
+        assert failed_names(freeze.verify(root)) == set()
+        monkeypatch.setattr(freeze, "REQUIRED_QISKIT_VERSIONS", freeze.REQUIRED_QISKIT_VERSIONS + ("0.0.0",))
+        before = (root / freeze.LOCK_FILE).read_bytes()
+        assert freeze.main(["--approve"], root=root) == 1
+        assert (root / freeze.LOCK_FILE).read_bytes() == before
+
+
+class TestRejectAndRollback:
+    real_freeze = True
+    live = TestRefreezeWithExistingSeeds.live
+
+    @pytest.fixture(autouse=True)
+    def environments(self, freeze_environments):
+        pass
+
+    def test_reject_restores_the_outgoing_freeze_and_full_rollback_verifies(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root, history, outgoing = rebound_copy(tmp_path)
+        proposed = file_bytes(root, *self.live)
+        preserve_rejected_versions(root, history)
+        assert freeze.main(["--reject", history], root=root) == 0
+        assert file_bytes(root, *self.live) == outgoing
+        rejected = root / history / freeze.REJECTED_DIR
+        assert (rejected / "code_freeze.json").read_bytes() == proposed[freeze.FREEZE_FILE]
+        assert (rejected / "code_freeze.lock.json").read_bytes() == proposed[freeze.LOCK_FILE]
+        assert (rejected / "seeds.lock.json").read_bytes() == proposed[freeze.SEEDS_LOCK_FILE]
+        record = json.loads((rejected / freeze.REJECTION_RECORD).read_text())
+        assert record["restored_seeds_lock_sha256"] == freeze.sha256_bytes(outgoing[freeze.SEEDS_LOCK_FILE])
+        assert record["seeds_sha256"] == freeze.sha256_bytes(outgoing[freeze.SEEDS_FILE])
+        assert list(record["rejected_files_sha256"]) == ["evaluation/suites.py"]
+        assert failed_names(freeze.verify(root, True)) == {"every covered file hash unchanged"}
+        assert freeze.main(["--reject", history], root=root) == 0
+        assert file_bytes(root, *self.live) == outgoing
+        original = root / history / freeze.archive_name("evaluation/suites.py", freeze.ORIGINAL_SUFFIX)
+        (root / "evaluation/suites.py").write_bytes(original.read_bytes())
+        assert failed_names(freeze.verify(root, True)) == set()
+
+    def test_a_new_cycle_after_rejection_needs_a_new_history_directory(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root, history, outgoing = rebound_copy(tmp_path)
+        preserve_rejected_versions(root, history)
+        assert freeze.main(["--reject", history], root=root) == 0
+        assert freeze.main(["--retire", history], root=root) == 1
+        assert file_bytes(root, *self.live) == outgoing
+        second = "evaluation/freeze_history/v1-r2"
+        original = root / history / freeze.archive_name("evaluation/suites.py", freeze.ORIGINAL_SUFFIX)
+        (root / second).mkdir(parents=True)
+        (root / second / original.name).write_bytes(original.read_bytes())
+        assert freeze.main(["--retire", second], root=root) == 0
+        assert freeze.main(["--write"], root=root) == 0
+        assert freeze.main(["--rebind-seeds", history], root=root) == 1
+        assert freeze.main(["--rebind-seeds", second], root=root) == 0
+        assert failed_names(freeze.verify(root)) == set()
+        assert (root / freeze.SEEDS_FILE).read_bytes() == outgoing[freeze.SEEDS_FILE]
+        assert freeze.main(["--approve"], root=root) == 0
+        assert failed_names(freeze.verify(root, True)) == set()
+
+    def test_reject_before_the_rebind_keeps_the_outgoing_seeds_lock(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        outgoing = file_bytes(root, *self.live)
+        history = change_and_propose(root)
+        preserve_rejected_versions(root, history)
+        assert freeze.main(["--reject", history], root=root) == 0
+        assert file_bytes(root, *self.live) == outgoing
+
+    @pytest.mark.parametrize("problem", ["no_preserved_copy", "wrong_preserved_copy", "approved", "seeds_changed",
+                                         "foreign_seeds_lock", "no_retirement_record"])
+    def test_reject_refuses_and_writes_nothing(self, tmp_path, problem):
+        from evaluation import check_code_freeze as freeze
+
+        root, history, _ = rebound_copy(tmp_path, approve=problem == "approved")
+        if problem != "no_preserved_copy":
+            preserve_rejected_versions(root, history)
+        rejected = root / history / freeze.REJECTED_DIR
+        if problem == "wrong_preserved_copy":
+            (rejected / freeze.archive_name("evaluation/suites.py", freeze.REJECTED_SUFFIX)).write_text("other\n")
+        elif problem == "seeds_changed":
+            seeds = root / freeze.SEEDS_FILE
+            document = json.loads(seeds.read_text())
+            document["seeds"][0]["seed"] += 1
+            seeds.write_bytes(make_seeds.serialize(document))
+        elif problem == "foreign_seeds_lock":
+            lock = root / freeze.SEEDS_LOCK_FILE
+            lock.write_bytes(freeze._serialize(dict(json.loads(lock.read_text()), code_freeze_sha256="f" * 64)))
+        elif problem == "no_retirement_record":
+            (root / history / freeze.RETIREMENT_RECORD).unlink()
+        live = file_bytes(root, *self.live)
+        assert freeze.main(["--reject", history], root=root) == 1
+        assert file_bytes(root, *self.live) == live
+        assert not (rejected / freeze.REJECTION_RECORD).exists()
+        assert not (rejected / "code_freeze.json").exists()
+
+    def test_interrupted_reject_fails_closed_at_every_step_and_resumes(self, tmp_path, monkeypatch):
+        from evaluation import check_code_freeze as freeze
+
+        steps = []
+        real = {name: getattr(freeze, name) for name in ("_publish", "_replace", "_remove")}
+
+        def recording(name):
+            def wrapper(path, *args):
+                steps.append((name, path.name))
+                return real[name](path, *args)
+            return wrapper
+
+        root, history, outgoing = rebound_copy(tmp_path / "dry")
+        preserve_rejected_versions(root, history)
+        for name in real:
+            monkeypatch.setattr(freeze, name, recording(name))
+        assert freeze.main(["--reject", history], root=root) == 0
+        monkeypatch.undo()
+        expected = file_bytes(root, *self.live) | file_bytes(root / history / freeze.REJECTED_DIR,
+                                                            "code_freeze.json", "code_freeze.lock.json",
+                                                            "seeds.lock.json", freeze.REJECTION_RECORD)
+        assert len(steps) == 9
+        for crash_at in range(len(steps)):
+            monkeypatch.setenv("VECLIB_MAXIMUM_THREADS", "1")
+            root, history, _ = rebound_copy(tmp_path / f"crash-{crash_at}")
+            preserve_rejected_versions(root, history)
+            count = {"calls": 0}
+
+            def crashing(name):
+                def wrapper(path, *args):
+                    if count["calls"] == crash_at:
+                        raise OSError(f"synthetic crash before {name} {path.name}")
+                    count["calls"] += 1
+                    return real[name](path, *args)
+                return wrapper
+
+            for name in real:
+                monkeypatch.setattr(freeze, name, crashing(name))
+            with pytest.raises(OSError):
+                freeze.main(["--reject", history], root=root)
+            monkeypatch.undo()
+            monkeypatch.setenv("VECLIB_MAXIMUM_THREADS", "1")
+            assert failed_names(freeze.verify(root, True)), crash_at
+            assert freeze.main(["--reject", history], root=root) == 0, crash_at
+            state = file_bytes(root, *self.live) | file_bytes(root / history / freeze.REJECTED_DIR,
+                                                             "code_freeze.json", "code_freeze.lock.json",
+                                                             "seeds.lock.json", freeze.REJECTION_RECORD)
+            assert state == expected, crash_at
+        assert expected[freeze.FREEZE_FILE] == outgoing[freeze.FREEZE_FILE]
+
+
+class TestRetireNeedsOriginals:
+    real_freeze = True
+
+    @pytest.fixture(autouse=True)
+    def environments(self, freeze_environments):
+        pass
+
+    def test_retire_refuses_until_every_changed_file_has_its_original(self, tmp_path):
+        from evaluation import check_code_freeze as freeze
+
+        root = seeded_freeze_copy(tmp_path)
+        live = file_bytes(root, *TestRefreezeWithExistingSeeds.live)
+        target = root / "evaluation/suites.py"
+        original_bytes = target.read_bytes()
+        target.write_bytes(original_bytes + b"\n")
+        history = root / "evaluation/freeze_history/v1"
+        assert freeze.main(["--retire", "evaluation/freeze_history/v1"], root=root) == 1
+        history.mkdir(parents=True)
+        original = history / freeze.archive_name("evaluation/suites.py", freeze.ORIGINAL_SUFFIX)
+        original.write_bytes(original_bytes + b"tampered\n")
+        assert freeze.main(["--retire", "evaluation/freeze_history/v1"], root=root) == 1
+        assert file_bytes(root, *TestRefreezeWithExistingSeeds.live) == live
+        original.write_bytes(original_bytes)
+        assert freeze.main(["--retire", "evaluation/freeze_history/v1"], root=root) == 0
+        record = json.loads((history / freeze.RETIREMENT_RECORD).read_text())
+        assert record["originals_sha256"] == {"evaluation/suites.py": freeze.sha256_bytes(original_bytes)}
+        assert record["seeds_sha256"] == freeze.sha256_bytes(live[freeze.SEEDS_FILE])

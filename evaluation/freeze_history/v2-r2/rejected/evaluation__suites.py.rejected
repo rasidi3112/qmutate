@@ -1,0 +1,115 @@
+"""T1-T6 test suites of the Phase 6A study as qmutate oracles (protocol revision 8, section 4).
+
+``make_oracle`` returns a callable ``oracle(circuit)`` that returns normally
+to pass and raises ``AssertionError`` to fail. Every comparison of sampled
+frequencies with expected probabilities uses exact fractions.
+"""
+
+from fractions import Fraction
+
+import numpy as np
+from qiskit.providers.basic_provider import BasicSimulator
+from qiskit.quantum_info import Statevector
+
+from qmutate import sample_counts
+
+from evaluation import study_config
+
+T4_TOLERANCE = study_config.T4_TOLERANCE
+T5_TOLERANCE = study_config.T5_TOLERANCE
+STATE_ATOL = study_config.T6_ATOL
+
+
+def exact_distribution(distribution):
+    """Return ``distribution`` with exact ``Fraction`` probabilities, checking they sum to 1."""
+    exact = {key: Fraction(value) for key, value in distribution.items() if value != 0}
+    if sum(exact.values()) != 1:
+        raise ValueError("expected distribution does not sum exactly to 1")
+    return exact
+
+
+def unique_mode(distribution):
+    """Return the unique most likely outcome, or ``None`` if the maximum is shared."""
+    best = max(distribution.values())
+    modes = [key for key, value in distribution.items() if value == best]
+    return modes[0] if len(modes) == 1 else None
+
+
+def marginal_one(distribution, bit):
+    """Return P(classical bit ``bit`` = 1) under ``distribution``."""
+    return sum((value for key, value in distribution.items() if key[len(key) - 1 - bit] == "1"), Fraction(0))
+
+
+def state_difference(actual, expected):
+    """Return max |actual - e^{i phi} expected| with the phase from their overlap."""
+    overlap = np.vdot(expected, actual)
+    phase = overlap / abs(overlap) if abs(overlap) > 0 else 1.0
+    return float(np.max(np.abs(actual - phase * expected)))
+
+
+def measurement_free_state(circuit):
+    """Return the statevector of ``circuit`` with final measurements removed, from |0...0>."""
+    return Statevector(circuit.remove_final_measurements(inplace=False)).data
+
+
+def make_oracle(suite, *, expected_distribution, expected_state, num_clbits, t4_bit, seed, shots):
+    """Return the oracle for ``suite`` with fixed expectations, seed and shots.
+
+    ``expected_distribution`` must hold exact fractions. ``seed`` and
+    ``shots`` are ignored by T6.
+    """
+    expected = dict(expected_distribution)
+    support = set(expected)
+    mode = unique_mode(expected)
+    marginal = marginal_one(expected, t4_bit) if t4_bit is not None else None
+
+    def t1(circuit):
+        try:
+            counts = BasicSimulator().run(circuit, shots=shots, seed_simulator=seed).result().get_counts()
+        except Exception as error:
+            raise AssertionError(f"T1: execution failed with {type(error).__name__}: {error}") from error
+        keys = [key.replace(" ", "") for key in counts]
+        if sum(counts.values()) != shots:
+            raise AssertionError(f"T1: {sum(counts.values())} shots returned, expected {shots}")
+        if any(len(key) != num_clbits or set(key) - {"0", "1"} for key in keys):
+            raise AssertionError("T1: an output key is not a bit string of the expected length")
+
+    def t2(circuit):
+        if mode is None:
+            raise ValueError("T2 requires a unique expected mode")
+        counts = sample_counts(circuit, shots=shots, seed=seed)
+        top = max(counts.values())
+        modes = sorted(key for key, value in counts.items() if value == top)
+        if modes != [mode]:
+            raise AssertionError(f"T2: most frequent outcomes {modes}, expected only {mode}")
+
+    def t3(circuit):
+        counts = sample_counts(circuit, shots=shots, seed=seed)
+        outside = sorted(key for key, value in counts.items() if value > 0 and key not in support)
+        if outside:
+            raise AssertionError(f"T3: outcomes outside the expected support: {outside}")
+
+    def t4(circuit):
+        counts = sample_counts(circuit, shots=shots, seed=seed)
+        ones = sum(value for key, value in counts.items() if key[len(key) - 1 - t4_bit] == "1")
+        observed = Fraction(ones, shots)
+        if abs(observed - marginal) > T4_TOLERANCE:
+            raise AssertionError(f"T4: P(c{t4_bit}=1) observed {observed}, expected {marginal}")
+
+    def t5(circuit):
+        counts = sample_counts(circuit, shots=shots, seed=seed)
+        keys = set(counts) | support
+        distance = sum((abs(Fraction(counts.get(k, 0), shots) - expected.get(k, Fraction(0))) for k in keys),
+                       Fraction(0)) / 2
+        if distance > T5_TOLERANCE:
+            raise AssertionError(f"T5: total variation {distance} exceeds {T5_TOLERANCE}")
+
+    def t6(circuit):
+        difference = state_difference(measurement_free_state(circuit), expected_state)
+        if difference > STATE_ATOL:
+            raise AssertionError(f"T6: state differs by {difference!r} after phase alignment")
+
+    oracles = {"T1": t1, "T2": t2, "T3": t3, "T4": t4, "T5": t5, "T6": t6}
+    if suite not in oracles:
+        raise ValueError(f"unknown suite {suite!r}")
+    return oracles[suite]

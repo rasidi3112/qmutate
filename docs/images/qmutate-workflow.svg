@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1210" height="940" viewBox="0 0 1210 940" role="img" aria-labelledby="title desc">
+  <title id="title">qmutate workflow</title>
+  <desc id="desc">How the public API of qmutate fits together: a Qiskit circuit is turned into removal candidates, an oracle is run against the original and every generated mutant, and the run report feeds mutation metrics, a schema version 1 report and, optionally, equivalence-adjusted metrics.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-light" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .title { font: 700 30px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2937; }
+      .subtitle { font: 400 15.5px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #64748b; }
+      .step { font: 700 12.5px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #64748b; letter-spacing: 0.08em; }
+      .head { font: 700 18px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2937; }
+      .body { font: 400 14.5px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #334155; }
+      .code { font: 500 14px "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace; fill: #1e293b; }
+      .module { font: 500 12.5px "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace; fill: #64748b; }
+      .label { font: 600 13.5px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #475569; }
+      .flow { fill: none; stroke: #475569; stroke-width: 2.2; }
+      .optional { fill: none; stroke: #94a3b8; stroke-width: 2.2; stroke-dasharray: 7 6; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1210" height="940" fill="#ffffff"/>
+
+  <text class="title" x="30" y="56">qmutate workflow</text>
+  <text class="subtitle" x="30" y="86">Public API of qmutate 0.1.0 (src/qmutate). Solid arrows: main path. Dashed arrows: optional steps.</text>
+
+  <g class="card" id="card-circuit">
+    <rect x="30" y="112" width="265" height="296" rx="20" fill="#e0f2fe" stroke="#7dd3fc" stroke-width="2"/>
+    <text class="step" x="52" y="142">1 · INPUT</text>
+    <text class="head" x="52" y="170">Qiskit circuit</text>
+    <text class="code" x="52" y="200">QuantumCircuit</text>
+    <text class="body" x="52" y="230">Each top-level instruction</text>
+    <text class="body" x="52" y="250">is a mutation target.</text>
+    <text class="body" x="52" y="282">Routed and scheduled</text>
+    <text class="body" x="52" y="302">circuits are rejected</text>
+    <text class="body" x="52" y="322">with ValueError.</text>
+  </g>
+
+  <g class="card" id="card-generate">
+    <rect x="325" y="112" width="265" height="296" rx="20" fill="#ede9fe" stroke="#c4b5fd" stroke-width="2"/>
+    <text class="step" x="347" y="142">2 · GENERATE</text>
+    <text class="head" x="347" y="170">Removal candidates</text>
+    <text class="code" x="347" y="200">generate_removal_mutants()</text>
+    <text class="body" x="347" y="228">One RemovalCandidate per</text>
+    <text class="body" x="347" y="248">top-level instruction:</text>
+    <text class="code" x="347" y="274">generated</text>
+    <text class="body" x="435" y="274">or</text>
+    <text class="code" x="458" y="274">skipped</text>
+    <text class="body" x="347" y="300">Skipped: measurement or</text>
+    <text class="body" x="347" y="320">barrier not allowed.</text>
+    <text class="body" x="347" y="346">Same removal path as</text>
+    <text class="code" x="347" y="366">remove_instruction()</text>
+    <text class="module" x="347" y="394">generator.py · mutation.py</text>
+  </g>
+
+  <g class="card" id="card-run">
+    <rect x="620" y="112" width="265" height="296" rx="20" fill="#dcfce7" stroke="#86efac" stroke-width="2"/>
+    <text class="step" x="642" y="142">3 · RUN</text>
+    <text class="head" x="642" y="170">Run the oracle</text>
+    <text class="code" x="642" y="200">run_removal_mutants()</text>
+    <text class="body" x="642" y="228">Oracle runs on the original</text>
+    <text class="body" x="642" y="248">first; if it fails, the run</text>
+    <text class="body" x="642" y="268">stops (BaselineFailedError).</text>
+    <text class="body" x="642" y="296">Then once per generated</text>
+    <text class="body" x="642" y="316">mutant, in index order.</text>
+    <text class="code" x="642" y="346">RunReport</text>
+    <text class="body" x="642" y="366">one MutantResult each</text>
+    <text class="module" x="642" y="394">runner.py</text>
+  </g>
+
+  <g class="card" id="card-report">
+    <rect x="915" y="112" width="265" height="296" rx="20" fill="#fef9c3" stroke="#facc15" stroke-width="2"/>
+    <text class="step" x="937" y="142">4 · MEASURE</text>
+    <text class="head" x="937" y="170">Metrics and reports</text>
+    <text class="code" x="937" y="200">report.score()</text>
+    <text class="code" x="937" y="224">report.metrics()</text>
+    <text class="body" x="937" y="246">→ MutationMetrics</text>
+    <text class="code" x="937" y="276">report_to_dict()</text>
+    <text class="body" x="937" y="298">→ dict, schema version 1</text>
+    <text class="code" x="937" y="328">format_text_report()</text>
+    <text class="body" x="937" y="350">→ plain-text summary</text>
+    <text class="module" x="937" y="394">metrics.py · reporting.py</text>
+  </g>
+
+  <path class="flow" d="M 295 260 L 321 260" marker-end="url(#arrow)"/>
+  <path class="flow" d="M 590 260 L 616 260" marker-end="url(#arrow)"/>
+  <path class="flow" d="M 885 260 L 911 260" marker-end="url(#arrow)"/>
+
+  <g class="card" id="card-outcomes">
+    <rect x="620" y="432" width="560" height="96" rx="16" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text class="label" x="642" y="458">Outcome per candidate</text>
+    <text class="code" x="642" y="484">killed</text>
+    <text class="body" x="712" y="484">assertion failed</text>
+    <text class="code" x="900" y="484">survived</text>
+    <text class="body" x="987" y="484">returned normally</text>
+    <text class="code" x="642" y="510">error</text>
+    <text class="body" x="712" y="510">other exception</text>
+    <text class="code" x="900" y="510">not_run</text>
+    <text class="body" x="987" y="510">candidate skipped</text>
+  </g>
+  <path class="optional" d="M 752 408 L 752 430"/>
+
+  <g class="card" id="card-oracle">
+    <rect x="30" y="562" width="560" height="320" rx="20" fill="#fff7ed" stroke="#fdba74" stroke-width="2"/>
+    <text class="step" x="52" y="592">ORACLE · CHOOSE ONE</text>
+    <text class="head" x="52" y="620">Your oracle</text>
+    <text class="code" x="52" y="648">oracle(circuit)</text>
+    <text class="body" x="52" y="676">Any callable; it receives a</text>
+    <text class="body" x="52" y="696">fresh copy of the circuit.</text>
+    <text class="body" x="52" y="724">assertion fails → killed</text>
+    <text class="body" x="52" y="744">returns → survived</text>
+    <text class="body" x="52" y="764">other exception → error</text>
+    <text class="body" x="52" y="796">Seed any sampling yourself</text>
+    <text class="body" x="52" y="816">for reproducible results.</text>
+    <path d="M 310 602 L 310 862" stroke="#fed7aa" stroke-width="1.5"/>
+    <text class="head" x="330" y="620">Sampling oracle</text>
+    <text class="code" x="330" y="648">distribution_oracle()</text>
+    <text class="body" x="330" y="676">Samples the reference once</text>
+    <text class="body" x="330" y="696">and each circuit with a</text>
+    <text class="body" x="330" y="716">fixed seed (BasicSimulator</text>
+    <text class="body" x="330" y="736">or a custom sampler).</text>
+    <text class="code" x="330" y="764">compare_counts()</text>
+    <text class="body" x="330" y="786">distinguished → killed</text>
+    <text class="body" x="330" y="806">within_tolerance or</text>
+    <text class="body" x="330" y="826">inconclusive → survived</text>
+    <text class="module" x="330" y="862">sampling.py</text>
+  </g>
+  <path class="flow" d="M 590 640 C 606 640, 604 420, 616 392" marker-end="url(#arrow)"/>
+  <text class="label" x="402" y="546">passed as the oracle →</text>
+
+  <g class="card" id="card-equivalence">
+    <rect x="620" y="562" width="560" height="320" rx="20" fill="#fce7f3" stroke="#f9a8d4" stroke-width="2"/>
+    <text class="step" x="642" y="592">OPTIONAL · EQUIVALENCE</text>
+    <text class="head" x="642" y="620">Equivalence-adjusted score</text>
+    <text class="code" x="642" y="648">classify_report(circuit, report, model=…)</text>
+    <text class="body" x="642" y="676">Classifies each executed mutant of the RunReport</text>
+    <text class="body" x="642" y="696">against the original, with the same models as</text>
+    <text class="code" x="642" y="722">check_equivalence()</text>
+    <text class="body" x="812" y="722">→ equivalent · not_equivalent · unknown</text>
+    <text class="code" x="642" y="756">EquivalenceModel.UNITARY</text>
+    <text class="body" x="642" y="776">matrices, global phase aligned</text>
+    <text class="code" x="900" y="756">.IDEAL_DISTRIBUTION</text>
+    <text class="body" x="900" y="776">exact outcome distribution</text>
+    <text class="code" x="642" y="810">ClassifiedReport.metrics()</text>
+    <text class="body" x="642" y="832">→ AdjustedMetrics: equivalent survivors leave the denominator</text>
+    <text class="module" x="642" y="862">equivalence.py · metrics.py</text>
+  </g>
+  <path class="optional" d="M 1110 528 L 1110 558" marker-end="url(#arrow-light)"/>
+  <text class="label" x="1022" y="548">RunReport</text>
+
+  <text class="subtitle" x="30" y="918">The Phase 6A study in evaluation/ is built on these functions; see evaluation/REPORT.md.</text>
+</svg>

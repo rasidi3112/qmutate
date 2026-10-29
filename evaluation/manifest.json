@@ -1,0 +1,875 @@
+{
+ "catalogue_version": "phase6a-catalogue-v1",
+ "canonical_source": {
+  "path": "evaluation/preflight/catalogue.py",
+  "sha256": "6a04754bf507e73a5c867bc3ae4997d479d9778fcab990f8fb30245d4912b01b"
+ },
+ "constraints": {
+  "barrier_free": true,
+  "instruction_indices_refer_to": "barrier-free operation lists in the canonical source",
+  "c4_index_map": {
+   "initial H": [
+    0,
+    2
+   ],
+   "oracle 1": [
+    3,
+    7
+   ],
+   "diffuser 1": [
+    8,
+    22
+   ],
+   "oracle 2": [
+    23,
+    27
+   ],
+   "diffuser 2": [
+    28,
+    42
+   ],
+   "measurements": [
+    43,
+    45
+   ]
+  }
+ },
+ "counts": {
+  "circuits": 6,
+  "faults": 70,
+  "D-NOT-EQUIVALENT": 57,
+  "D-EQUIVALENT": 13,
+  "missing_gate": 17
+ },
+ "circuits": [
+  {
+   "id": "C1",
+   "name": "GHZ-3",
+   "num_qubits": 3,
+   "num_clbits": 3,
+   "instructions": 6,
+   "operations_sha256": "34caa14f9795a495ca83d3a4321a455e9c1cd4571ea23d16a9f28d9b11bf8e57"
+  },
+  {
+   "id": "C2",
+   "name": "Bernstein-Vazirani, secret 1011",
+   "num_qubits": 5,
+   "num_clbits": 4,
+   "instructions": 17,
+   "operations_sha256": "f9aae4d22dcea423149c17991690ac43d5bdd2146b195e5457c4cb841cc3536d"
+  },
+  {
+   "id": "C3",
+   "name": "Deutsch-Jozsa, f(x) = x0 xor x1 xor x2",
+   "num_qubits": 4,
+   "num_clbits": 3,
+   "instructions": 14,
+   "operations_sha256": "189d02a3be9f43b70afcfcde0636198651b22100ad46ae530d3f58f2b0066655"
+  },
+  {
+   "id": "C4",
+   "name": "Grover-3, marked 101, 2 iterations",
+   "num_qubits": 3,
+   "num_clbits": 3,
+   "instructions": 46,
+   "operations_sha256": "6a39a68ea33694d74cf6037214374e9e4b6e08326c9486652532d9979c15faa9"
+  },
+  {
+   "id": "C5",
+   "name": "QFT-3 on |5>",
+   "num_qubits": 3,
+   "num_clbits": 3,
+   "instructions": 12,
+   "operations_sha256": "1b7b109d908945b8f43005362f05edd63ca84849b001174b88f054cec5410f19"
+  },
+  {
+   "id": "C6",
+   "name": "Teleportation of ry(2pi/3)|0>, deferred measurement",
+   "num_qubits": 3,
+   "num_clbits": 3,
+   "instructions": 10,
+   "operations_sha256": "46b499b8b6365e55176a69f6aad8bf10875e679f4bd63a718ef0e3b91474d587"
+  }
+ ],
+ "faults": [
+  {
+   "id": "C1-F01",
+   "circuit": "C1",
+   "category": "wrong gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 6,
+   "operations_sha256": "75e556e7072ceb1b8ade5a5091d0859e51b5feb18664078721bb8e3353de6000"
+  },
+  {
+   "id": "C1-F02",
+   "circuit": "C1",
+   "category": "wrong angle",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 6,
+   "operations_sha256": "fe6474e9d90befbe647bc479d36eab8e954beadbe83676fc6b8690dc59f71dc3"
+  },
+  {
+   "id": "C1-F03",
+   "circuit": "C1",
+   "category": "wrong angle",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 6,
+   "operations_sha256": "5c49776e92b0e1d794eb1f6a47500f3215e3ca253353c21cc9b7bfacfe45512b"
+  },
+  {
+   "id": "C1-F04",
+   "circuit": "C1",
+   "category": "swapped control/target",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 6,
+   "operations_sha256": "a625dba4aaac70ac3f00e7bf7ed568d94a62606b19e20685c7beeff89e5baf11"
+  },
+  {
+   "id": "C1-F05",
+   "circuit": "C1",
+   "category": "swapped control/target",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 6,
+   "operations_sha256": "f51c38aac3d1c994e3551fff72dbf8c9aef932eea935c313945565e66253c23a"
+  },
+  {
+   "id": "C1-F06",
+   "circuit": "C1",
+   "category": "wrong qubit",
+   "tag": "other",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 6,
+   "operations_sha256": "588f9310731fdcaec05015e23fc21bd65725f12f927706ee06de2c342ea0f2de"
+  },
+  {
+   "id": "C1-F07",
+   "circuit": "C1",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 5,
+   "operations_sha256": "db9997712240c52735e1b32fdc9192acfc7fe9c28c16cda3eecb07611093e0bc"
+  },
+  {
+   "id": "C1-F08",
+   "circuit": "C1",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 5,
+   "operations_sha256": "61ed0fcf5aa2879f52e7ab8d5e98e3948650fcf75f375b1ebf79e5c158fb8257"
+  },
+  {
+   "id": "C1-F09",
+   "circuit": "C1",
+   "category": "extra gate",
+   "tag": "other",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 7,
+   "operations_sha256": "7c7213fea93dfb8aa9c44f48d17066ecf3971bac1afb4af18ff88c0211f3b7a9"
+  },
+  {
+   "id": "C1-F10",
+   "circuit": "C1",
+   "category": "extra gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 7,
+   "operations_sha256": "fad13a24056335c4eea4aa6003c20ca930782c51b4b1583bd93690fce486da6f"
+  },
+  {
+   "id": "C1-F11",
+   "circuit": "C1",
+   "category": "measurement mapping",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": true,
+   "former_reserve": false,
+   "instructions": 6,
+   "operations_sha256": "deed18e71d7cb55d010fb3d3474ea8dc41167c31b0a119db4822496cd16ab197"
+  },
+  {
+   "id": "C1-F12",
+   "circuit": "C1",
+   "category": "wrong gate",
+   "tag": "other",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 6,
+   "operations_sha256": "b42604111624bf6e02a3d145c6e6bd6726d313ec02a770e11882e54b32507148"
+  },
+  {
+   "id": "C2-F01",
+   "circuit": "C2",
+   "category": "missing gate / wrong oracle",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 16,
+   "operations_sha256": "412773e66305ffa48b5f73451acba2e2c8661b7bf9c0ab5ef88bdd427864fe28"
+  },
+  {
+   "id": "C2-F02",
+   "circuit": "C2",
+   "category": "extra gate / wrong oracle",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 18,
+   "operations_sha256": "ae45c8ee9b8e24d7a2a65c9b3bd4c0266ebed8387da5dabee45a9fbc070c5ce6"
+  },
+  {
+   "id": "C2-F03",
+   "circuit": "C2",
+   "category": "wrong qubit",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 17,
+   "operations_sha256": "4cfcb6b29eb49f327f9764c0f9ad957401eed51ae35d7fab76b9706f4ec95eef"
+  },
+  {
+   "id": "C2-F04",
+   "circuit": "C2",
+   "category": "swapped control/target",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 17,
+   "operations_sha256": "d6976b7502db4eea10f94f7acec031628eb46894dff0a5351085b077db18488e"
+  },
+  {
+   "id": "C2-F05",
+   "circuit": "C2",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 16,
+   "operations_sha256": "fec8b916786412e2ac3bb4a294d41f143e3e5de389714687bd6cf41d400703d3"
+  },
+  {
+   "id": "C2-F06",
+   "circuit": "C2",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 16,
+   "operations_sha256": "5e7f2987283025f937e03939900e6072724fc4abbc58cf511ac1891477cd0c58"
+  },
+  {
+   "id": "C2-F07",
+   "circuit": "C2",
+   "category": "extra gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 18,
+   "operations_sha256": "f7bf0f44d0a3a7afcb4bb6508bf6f9e958e682dc706c214c927b9bc20f7a7644"
+  },
+  {
+   "id": "C2-F08",
+   "circuit": "C2",
+   "category": "wrong gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 17,
+   "operations_sha256": "a19bf95e01487d290825fc253091dbce9d650f69521936b390efa97284365dd2"
+  },
+  {
+   "id": "C2-F09",
+   "circuit": "C2",
+   "category": "wrong gate (rotation for H)",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 17,
+   "operations_sha256": "d97d1ca2d0c1b883c1a2f1d96fd134b8391153b4212dd70eef4faf8809df8b2f"
+  },
+  {
+   "id": "C2-F10",
+   "circuit": "C2",
+   "category": "measurement mapping",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": true,
+   "former_reserve": false,
+   "instructions": 17,
+   "operations_sha256": "cc60bbe56cb49daff00ddc87f9770acc0cb12614e7d2dce3427e4cca5d368f8c"
+  },
+  {
+   "id": "C2-F11",
+   "circuit": "C2",
+   "category": "extra gate",
+   "tag": "other",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 18,
+   "operations_sha256": "22f0d23d918379cd92152b226f9b82fa404d80c61aa1ef5ac54d546edfd0d1c6"
+  },
+  {
+   "id": "C3-F01",
+   "circuit": "C3",
+   "category": "wrong oracle (constant)",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 11,
+   "operations_sha256": "416baddd20a2d044c23c41dd675ebbc0f160edb8495c6a871268edd17cd1e75e"
+  },
+  {
+   "id": "C3-F02",
+   "circuit": "C3",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 13,
+   "operations_sha256": "349808d7060b738ad3a40ed32a4fef181ca6259530dc08ecff95a1c61b40460e"
+  },
+  {
+   "id": "C3-F03",
+   "circuit": "C3",
+   "category": "wrong qubit",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 14,
+   "operations_sha256": "898fae3b8d714ba1c98d232ebaca169f97a59b276caf96baf237e92e5b598acd"
+  },
+  {
+   "id": "C3-F04",
+   "circuit": "C3",
+   "category": "swapped control/target",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 14,
+   "operations_sha256": "18cf006e2a2c08d2275b7e25169b160773c54d6d89b122f6aad1946b617ad29d"
+  },
+  {
+   "id": "C3-F05",
+   "circuit": "C3",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 13,
+   "operations_sha256": "92379aefbbcd6d43cbdb651bf435c0dc45b8344d9830ec875b277e2d08cbe60d"
+  },
+  {
+   "id": "C3-F06",
+   "circuit": "C3",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 13,
+   "operations_sha256": "94fe89e76c61a1779332dd044db274753057d8b82ecb86aa6d43361b163af343"
+  },
+  {
+   "id": "C3-F07",
+   "circuit": "C3",
+   "category": "extra gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 15,
+   "operations_sha256": "f61b9379f4c519196a4b26583816422db4da694752f9c8e3a38bb858ad540919"
+  },
+  {
+   "id": "C3-F08",
+   "circuit": "C3",
+   "category": "wrong gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 14,
+   "operations_sha256": "fc426c9e1ab7946acb9d7a0031656ddb59917067e8ca52e8ff77a840da478700"
+  },
+  {
+   "id": "C3-F09",
+   "circuit": "C3",
+   "category": "wrong angle",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 14,
+   "operations_sha256": "a9cbcb662efa9c1db00933f2bd2a6c8041791886ff936b07971bde1846c8082e"
+  },
+  {
+   "id": "C3-F10",
+   "circuit": "C3",
+   "category": "measurement mapping",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": true,
+   "former_reserve": false,
+   "instructions": 14,
+   "operations_sha256": "364bfb56dd94dea4b5a894ac76cdd3b8515c7a5bd0514dd57fa17ce7efa07b2b"
+  },
+  {
+   "id": "C3-F11",
+   "circuit": "C3",
+   "category": "extra gate",
+   "tag": "other",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 15,
+   "operations_sha256": "bd8690c6fe69107bc650f0c81119e1709463d78cd42c8280bc51a8e8ba635300"
+  },
+  {
+   "id": "C4-F01",
+   "circuit": "C4",
+   "category": "wrong parameter (iterations)",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 26,
+   "operations_sha256": "ca291045cb6b577838dd5a18df609c0cc5eae3018f01d1790876728280c3a7d8"
+  },
+  {
+   "id": "C4-F02",
+   "circuit": "C4",
+   "category": "wrong parameter (iterations)",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 66,
+   "operations_sha256": "a52f4e0652ffd8783cd4ab1a571983419af9e64df310ef395b7bd2a6b4b7454e"
+  },
+  {
+   "id": "C4-F03",
+   "circuit": "C4",
+   "category": "wrong qubit / wrong oracle",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 46,
+   "operations_sha256": "203dce87f5559b421444bd8bd7a13b9b170e94ace3288c074b29793a66ba6985"
+  },
+  {
+   "id": "C4-F04",
+   "circuit": "C4",
+   "category": "missing block",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 31,
+   "operations_sha256": "e85841ec7fea07d79d2a49fcd292149810152c563096f449dbcb25590bedf8b3"
+  },
+  {
+   "id": "C4-F05",
+   "circuit": "C4",
+   "category": "wrong oracle",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 42,
+   "operations_sha256": "fc81aa1ef2c074a92e1c7ee6606ed42b2032edf10e95c5a11561b120a7b83509"
+  },
+  {
+   "id": "C4-F06",
+   "circuit": "C4",
+   "category": "measurement mapping",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": true,
+   "former_reserve": false,
+   "instructions": 46,
+   "operations_sha256": "1e580ab554e58799cf240aa1d2887b192a5934ad141628ea54ccd22a60b23f6d"
+  },
+  {
+   "id": "C4-F07",
+   "circuit": "C4",
+   "category": "extra gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 47,
+   "operations_sha256": "ea0d1bcf6c0b974ce407da9913127062c3fe1cb22ef89b0e1dfc2212580ebe1f"
+  },
+  {
+   "id": "C4-F08",
+   "circuit": "C4",
+   "category": "extra gate",
+   "tag": "other",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 47,
+   "operations_sha256": "6e9f32b0d38646d11ae4db50dd6d3ad7554c6f70b9047fb6b18656858a0bc34d"
+  },
+  {
+   "id": "C4-F09",
+   "circuit": "C4",
+   "category": "wrong angle",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 50,
+   "operations_sha256": "1bc9d24cfbf3fd89fbccfc91fbc8a831c2a4b603b648de0721b1656133e21757"
+  },
+  {
+   "id": "C4-F10",
+   "circuit": "C4",
+   "category": "swapped control/target",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 46,
+   "operations_sha256": "9cbea98e5a7791f23697d044fc3ac18a1b0a7c3e9f16e2cec82280257f68fde3"
+  },
+  {
+   "id": "C4-F11",
+   "circuit": "C4",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 45,
+   "operations_sha256": "1b122d9ad6ae62d143994f107a12b14110804b04f224fffbaad903e5c6a27454"
+  },
+  {
+   "id": "C4-F12",
+   "circuit": "C4",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 45,
+   "operations_sha256": "d971e92f16d41705b1366778164ef29d3be8902f24dae6dacd54f70717a0c23a"
+  },
+  {
+   "id": "C5-F01",
+   "circuit": "C5",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 11,
+   "operations_sha256": "22e3c7bd82446013ec494589443cf66106685955599bd6f37e1fa425261916fc"
+  },
+  {
+   "id": "C5-F02",
+   "circuit": "C5",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 11,
+   "operations_sha256": "e26cef9d527a4a32ec2820e257b54b4b541f0a6585c739dddc3e8d90eb0ab8e2"
+  },
+  {
+   "id": "C5-F03",
+   "circuit": "C5",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 11,
+   "operations_sha256": "45c72430f153e4cb6eedb4644322079a135a3c20f7e294a41e3fc8b75c4b408d"
+  },
+  {
+   "id": "C5-F04",
+   "circuit": "C5",
+   "category": "wrong gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 12,
+   "operations_sha256": "9e8014121b99b2dbb854d8104a7fffdcf197ae691c5e103f499ae5f2c0b2aa7c"
+  },
+  {
+   "id": "C5-F05",
+   "circuit": "C5",
+   "category": "wrong angle",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 12,
+   "operations_sha256": "d83fc0d4d92d677c970fa1dfe4ec6b610e292e8e8118ae2ff31f225691aee806"
+  },
+  {
+   "id": "C5-F06",
+   "circuit": "C5",
+   "category": "wrong qubit",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 12,
+   "operations_sha256": "a59c6d67570f0ae589552091ce4c1c7a9d55553a7981ef3e3d405ecc20aed70f"
+  },
+  {
+   "id": "C5-F07",
+   "circuit": "C5",
+   "category": "extra gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 13,
+   "operations_sha256": "0f0e39d04411c3b776793c768f69ec65c5053a87c749ecd4fb206e518bdd13f3"
+  },
+  {
+   "id": "C5-F08",
+   "circuit": "C5",
+   "category": "measurement mapping",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": true,
+   "former_reserve": false,
+   "instructions": 12,
+   "operations_sha256": "2b2772f91de7fb013f7b8e02e5fa13bf79b855054c66407b27f18989725315e9"
+  },
+  {
+   "id": "C5-F09",
+   "circuit": "C5",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 11,
+   "operations_sha256": "003f8035c49974831b9aef52eca0dd5c50c892d6b393460c3d0a05e7f6c91165"
+  },
+  {
+   "id": "C5-F10",
+   "circuit": "C5",
+   "category": "wrong qubit",
+   "tag": "other",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 12,
+   "operations_sha256": "1c200c16f4328b9185c9ea0c1b93c2981fe95c6c44cc45a9f59694d2235986cc"
+  },
+  {
+   "id": "C5-F11",
+   "circuit": "C5",
+   "category": "wrong angle",
+   "tag": "other",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 12,
+   "operations_sha256": "f285b634f79bd2d79c19840a0cf1fb2da782eea88a70bb0b9345f4338a29097f"
+  },
+  {
+   "id": "C5-F12",
+   "circuit": "C5",
+   "category": "wrong gate (state preparation)",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": true,
+   "instructions": 12,
+   "operations_sha256": "97623e3baa92c71dc216b3f8e6abd3b979e16ff9859fa47c9a702e0b47ed5f5f"
+  },
+  {
+   "id": "C6-F01",
+   "circuit": "C6",
+   "category": "wrong order",
+   "tag": "other",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 10,
+   "operations_sha256": "4115d1fe76ad367bb02aad5b415012384bdb0dda0f8248a446644d1171c17794"
+  },
+  {
+   "id": "C6-F02",
+   "circuit": "C6",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 9,
+   "operations_sha256": "c6abf2b3c4bf29b357cb127ae22d4516051fcd7a9e5a60e50dc253ce5a2ed582"
+  },
+  {
+   "id": "C6-F03",
+   "circuit": "C6",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 9,
+   "operations_sha256": "6bc08a6d63c4a1ccf1f98031c67a12b31bd2964acec38fd680f02f43aa10b7c7"
+  },
+  {
+   "id": "C6-F04",
+   "circuit": "C6",
+   "category": "wrong angle",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 10,
+   "operations_sha256": "2ac66ee240a5d2d9115e8802fbd20586b2a26930373746ee568415b71c6f232f"
+  },
+  {
+   "id": "C6-F05",
+   "circuit": "C6",
+   "category": "wrong angle",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 10,
+   "operations_sha256": "e5dea394567b0a69c9f791472271c423d4efb1fa7fb6230827bfd17fec15ef6e"
+  },
+  {
+   "id": "C6-F06",
+   "circuit": "C6",
+   "category": "swapped control/target",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 10,
+   "operations_sha256": "fb5f46f6ef5ab5997770de3d1f6b87572ce637088a62688f4cbfd41f37b27a76"
+  },
+  {
+   "id": "C6-F07",
+   "circuit": "C6",
+   "category": "swapped control/target",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 10,
+   "operations_sha256": "2c314b2d6796ca04ee91a2ccc2105e550dd623f1961aa311e3df50aa40e139fc"
+  },
+  {
+   "id": "C6-F08",
+   "circuit": "C6",
+   "category": "wrong qubit",
+   "tag": "other",
+   "expected_class": "D-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 10,
+   "operations_sha256": "836d891580b30baf38689a9767a0a7029f5b6c6b12c26b337c0fb14fe6501a9a"
+  },
+  {
+   "id": "C6-F09",
+   "circuit": "C6",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 9,
+   "operations_sha256": "56958936668f0bbb551607d3e8506f3d9a9e81ec75f989a65da462230ae598d6"
+  },
+  {
+   "id": "C6-F10",
+   "circuit": "C6",
+   "category": "measurement mapping",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": true,
+   "former_reserve": false,
+   "instructions": 10,
+   "operations_sha256": "bf3206f774c02a14bafb3a3ad2ebe0d749ce08813f326a826dd7eeaf7a9d0df8"
+  },
+  {
+   "id": "C6-F11",
+   "circuit": "C6",
+   "category": "extra gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": false,
+   "instructions": 11,
+   "operations_sha256": "5512293a8cc810e0089e7146c5356bf5a0122d29cd295b98b2eaff2495b43f23"
+  },
+  {
+   "id": "C6-F12",
+   "circuit": "C6",
+   "category": "wrong gate",
+   "tag": "other",
+   "expected_class": "D-NOT-EQUIVALENT",
+   "measurement_only": false,
+   "former_reserve": true,
+   "instructions": 10,
+   "operations_sha256": "c778114151f63387d06131f206d3a84170ee50417855c70e3b2623d5324692d5"
+  }
+ ],
+ "preflight_evidence_sha256": {
+  "preflight/PREFLIGHT.md": "fef1d4bb2db6c0609e15e5ce00ad948c0f6a478127da7061876bf7c767819d0b",
+  "preflight/validate.py": "81cd0f7faa4e3360a0d38feb60b845cde63b777a0e7d08e842fe90bbb8e0ab31",
+  "preflight/smoke.py": "5bb2557bd6419a9c25d6cb638c8fc0c10f5680c3635ffd734c9712f705b478e4",
+  "preflight/results/validate-qiskit-2.6.1.json": "867f701330f36198c9db4e9878f1e7ca30de4053c0caf1330fa04ba302289d1d",
+  "preflight/results/validate-qiskit-2.0.3.json": "15644265c9b8647ae8353314698d5673f032c93b28356b8266c9287499591255",
+  "preflight/results/smoke-qiskit-2.6.1.json": "6396358538777175d537834c2efe8eef93c6cfa609910ed6750facc18afcd448",
+  "preflight/results/smoke-qiskit-2.0.3.json": "1361a595c048af37c8358d99670a116cf3b21e836f65b63b1096e94fa9a1e972"
+ }
+}

@@ -1,0 +1,278 @@
+"""Exact statistics of the Phase 6A study (protocol revision 7, sections 5 and 7-9).
+
+Everything here is a pure function of its arguments: detection rates,
+behaviour-equivalence groups, deduplicated detection rates, Kendall tau-b per
+circuit and pooled, permutation p-values and the hypothesis rules. Rates and
+scores are exact ``Fraction`` values; only tau values and the square roots
+in their denominators are floats.
+"""
+
+import itertools
+import math
+import random
+from fractions import Fraction
+
+DETECTED = "detected"
+UNDETECTED = "undetected"
+ERROR = "error"
+OUTCOMES = (DETECTED, UNDETECTED, ERROR)
+
+
+def detection_rate(outcomes):
+    """Return the detection-rate record for ``{fault_id: outcome}`` (section 5.3)."""
+    for outcome in outcomes.values():
+        if outcome not in OUTCOMES:
+            raise ValueError(f"unknown outcome {outcome!r}")
+    detected = sum(o == DETECTED for o in outcomes.values())
+    errors = sum(o == ERROR for o in outcomes.values())
+    total = len(outcomes)
+    denominator = total - errors
+    return {
+        "faults": total,
+        "detected": detected,
+        "undetected": total - detected - errors,
+        "errors": errors,
+        "rate": Fraction(detected, denominator) if denominator else None,
+        "rate_errors_as_undetected": Fraction(detected, total) if errors and total else None,
+    }
+
+
+def group_components(fault_ids, related):
+    """Return ``(groups, anomalies)`` for the relation ``related(a, b)`` (section 5.4).
+
+    Groups are connected components. A component is kept as a group only if
+    every pair in it is related; otherwise its members become singletons and
+    the component is reported as an anomaly. Groups are sorted tuples, in
+    order of their lowest member.
+    """
+    ids = sorted(fault_ids)
+    parent = {fault_id: fault_id for fault_id in ids}
+
+    def root(fault_id):
+        while parent[fault_id] != fault_id:
+            fault_id = parent[fault_id]
+        return fault_id
+
+    pairs = {}
+    for first, second in itertools.combinations(ids, 2):
+        pairs[(first, second)] = bool(related(first, second))
+        if pairs[(first, second)]:
+            parent[root(second)] = root(first)
+    components = {}
+    for fault_id in ids:
+        components.setdefault(root(fault_id), []).append(fault_id)
+    groups = []
+    anomalies = []
+    for members in components.values():
+        if all(pairs[pair] for pair in itertools.combinations(members, 2)):
+            groups.append(tuple(members))
+        else:
+            anomalies.append(tuple(members))
+            groups.extend((member,) for member in members)
+    return sorted(groups), sorted(anomalies)
+
+
+def dedup_detection_rate(groups, outcomes):
+    """Return the deduplicated detection-rate record (section 5.4).
+
+    Each group counts once, through the outcome of its lowest fault ID. Groups
+    whose members' outcomes differ are listed; they never change the rate.
+    """
+    detected = 0
+    errors = 0
+    disagreements = []
+    for group in groups:
+        representative = min(group)
+        outcome = outcomes[representative]
+        if outcome == DETECTED:
+            detected += 1
+        elif outcome == ERROR:
+            errors += 1
+        member_outcomes = {member: outcomes[member] for member in group}
+        if len(set(member_outcomes.values())) > 1:
+            disagreements.append({"group": list(group), "outcomes": member_outcomes})
+    denominator = len(groups) - errors
+    return {
+        "groups": len(groups),
+        "detected": detected,
+        "errors": errors,
+        "rate": Fraction(detected, denominator) if denominator else None,
+        "representatives": [min(group) for group in groups],
+        "disagreements": disagreements,
+    }
+
+
+def _sign(value):
+    return (value > 0) - (value < 0)
+
+
+def pair_counts(points):
+    """Return the pair counts of section 7.2 for a list of ``(x, y)`` points."""
+    n = len(points)
+    n1 = n2 = concordant = discordant = 0
+    for (x1, y1), (x2, y2) in itertools.combinations(points, 2):
+        tied_x = x1 == x2
+        tied_y = y1 == y2
+        n1 += tied_x
+        n2 += tied_y
+        if not tied_x and not tied_y:
+            if _sign(x1 - x2) == _sign(y1 - y2):
+                concordant += 1
+            else:
+                discordant += 1
+    n0 = n * (n - 1) // 2
+    return {"n": n, "n0": n0, "n1": n1, "n2": n2, "n_c": concordant, "n_d": discordant,
+            "u_x": n0 - n1, "u_y": n0 - n2}
+
+
+def tau_b(counts):
+    """Return ``(tau_b, reason)``; ``tau_b`` is ``None`` with a reason when undefined (section 7.3)."""
+    if counts["n"] < 2:
+        return None, "fewer than 2 data points"
+    if counts["u_x"] == 0 and counts["u_y"] == 0:
+        return None, "mutation score and detection rate constant"
+    if counts["u_x"] == 0:
+        return None, "mutation score constant"
+    if counts["u_y"] == 0:
+        return None, "detection rate constant"
+    return (counts["n_c"] - counts["n_d"]) / math.sqrt(counts["u_x"] * counts["u_y"]), None
+
+
+def pooled(counts_by_circuit, members):
+    """Return the stratified pooled statistic over ``members`` (section 7.4)."""
+    members = sorted(members)
+    numerator = sum(counts_by_circuit[c]["n_c"] - counts_by_circuit[c]["n_d"] for c in members)
+    sum_x = sum(counts_by_circuit[c]["u_x"] for c in members)
+    sum_y = sum(counts_by_circuit[c]["u_y"] for c in members)
+    if not members:
+        value, reason = None, "no circuit in the set"
+    elif sum_x == 0 or sum_y == 0:
+        value, reason = None, "a denominator sum is 0"
+    else:
+        value, reason = numerator / math.sqrt(sum_x * sum_y), None
+    return {"circuits": members, "numerator": numerator, "sum_u_x": sum_x, "sum_u_y": sum_y,
+            "value": value, "undefined_reason": reason}
+
+
+def _ranked(points):
+    """Return x signs and integer y ranks so permutations compare without fractions."""
+    xs = [x for x, _ in points]
+    levels = {value: rank for rank, value in enumerate(sorted(set(y for _, y in points)))}
+    ys = [levels[y] for _, y in points]
+    pairs = [(i, j, _sign(xs[i] - xs[j])) for i, j in itertools.combinations(range(len(xs)), 2)
+             if xs[i] != xs[j]]
+    return pairs, ys
+
+
+def _numerator(pairs, ys):
+    return sum(sx * _sign(ys[i] - ys[j]) for i, j, sx in pairs)
+
+
+def exact_p_value(points):
+    """Return ``(count, n!, p)`` over all orderings of the y values (section 8)."""
+    pairs, ys = _ranked(points)
+    observed = _numerator(pairs, ys)
+    total = 0
+    count = 0
+    for order in itertools.permutations(ys):
+        total += 1
+        if _numerator(pairs, order) >= observed:
+            count += 1
+    return count, total, Fraction(count, total)
+
+
+def monte_carlo_p_value(points_by_circuit, members, seed, permutations):
+    """Return ``(b, B, p)`` with ``p = (b + 1) / (B + 1)`` (section 8)."""
+    prepared = [_ranked(points_by_circuit[c]) for c in sorted(members)]
+    observed = sum(_numerator(pairs, ys) for pairs, ys in prepared)
+    generator = random.Random(seed)
+    b = 0
+    for _ in range(permutations):
+        total = 0
+        for pairs, ys in prepared:
+            shuffled = list(ys)
+            generator.shuffle(shuffled)
+            total += _numerator(pairs, shuffled)
+        if total >= observed:
+            b += 1
+    return b, permutations, Fraction(b + 1, permutations + 1)
+
+
+def analyze(points_by_circuit, seeds=None, permutations=0, p_values=True):
+    """Return per-circuit and pooled tau statistics with p-values (sections 7 and 8).
+
+    ``seeds`` maps ``"tau_pooled"`` and ``"tau_pooled_def"`` to permutation
+    seeds; with ``None`` no pooled p-value is computed. Per-circuit exact
+    p-values are computed for circuits with a defined tau-b unless
+    ``p_values`` is false, as for the matched-suite baseline.
+    """
+    per_circuit = {}
+    counts_by_circuit = {}
+    for circuit_id in sorted(points_by_circuit):
+        points = points_by_circuit[circuit_id]
+        counts = pair_counts(points)
+        value, reason = tau_b(counts)
+        row = dict(counts, tau_b=value, undefined_reason=reason, in_p=counts["n"] >= 2, in_d=value is not None)
+        if value is not None and p_values:
+            count, total, p = exact_p_value(points)
+            row.update(p_numerator=count, p_permutations=total, p_value=p)
+        per_circuit[circuit_id] = row
+        counts_by_circuit[circuit_id] = counts
+    members_p = [c for c, row in per_circuit.items() if row["in_p"]]
+    members_d = [c for c, row in per_circuit.items() if row["in_d"]]
+    result = {
+        "per_circuit": per_circuit,
+        "tau_pooled": pooled(counts_by_circuit, members_p),
+        "tau_pooled_def": pooled(counts_by_circuit, members_d),
+        "left_out": sorted(c for c, row in per_circuit.items() if not row["in_p"]),
+    }
+    for name, members in (("tau_pooled", members_p), ("tau_pooled_def", members_d)):
+        statistic = result[name]
+        if p_values and seeds is not None and statistic["value"] is not None:
+            b, total, p = monte_carlo_p_value(points_by_circuit, members, seeds[name], permutations)
+            statistic.update(p_b=b, p_permutations=total, p_value=p, p_seed=seeds[name])
+    return result
+
+
+def h1_status(primary, circuits_required=4):
+    """Return H1's status from a primary analysis only (section 7.6)."""
+    pooled_value = primary["tau_pooled"]["value"]
+    if pooled_value is None:
+        return "undecidable"
+    positive = sum(1 for row in primary["per_circuit"].values() if row["tau_b"] is not None and row["tau_b"] > 0)
+    return "supported" if pooled_value >= 0.5 and positive >= circuits_required else "not supported"
+
+
+def h3_status(deltas, bound=Fraction(1, 10), circuits_required=4):
+    """Return H3's status from ``{circuit: delta or None}`` (section 9)."""
+    defined = [abs(d) for d in deltas.values() if d is not None]
+    if len(defined) < circuits_required:
+        return "undecidable"
+    return "supported" if sum(d <= bound for d in defined) >= circuits_required else "not supported"
+
+
+def h4_status(ranges, bound=Fraction(1, 10)):
+    """Return H4's status from ``{(circuit, suite): range or None}`` (section 9)."""
+    if any(r is not None and r > bound for r in ranges.values()):
+        return "not supported"
+    if not ranges or any(r is None for r in ranges.values()):
+        return "undecidable"
+    return "supported"
+
+
+def fault_set_statistics(primary_points, dedup_points, baseline_points, primary_seeds, dedup_seeds, permutations):
+    """Return the primary, H1 and deduplication-sensitivity results for one fault set.
+
+    H1 is computed from ``primary_points`` alone, so the deduplication inputs
+    cannot change it.
+    """
+    primary = analyze(primary_points, primary_seeds, permutations)
+    return {
+        "primary": primary,
+        "h1": h1_status(primary),
+        "dedup_sensitivity": {
+            "analysis": analyze(dedup_points, dedup_seeds, permutations),
+            "matched_suite_baseline": analyze(baseline_points, p_values=False),
+            "affects_h1": False,
+        },
+    }

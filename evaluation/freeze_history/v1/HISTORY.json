@@ -1,0 +1,13 @@
+{
+ "archived_on": "2026-10-29",
+ "files_sha256": {
+  "code_freeze.json": "163fdd6fb2d087416a643d53d019d8d1596ac02c0a027dce13e925b3aa79bb15",
+  "code_freeze.lock.json": "651955171614e03f69bcd1fa5c167f0a9072fde94bc610152449fa14b1b687f5",
+  "seeds.json": "15c2a225e3f880386976e75fd401b58a9c3f6630629a6c0c1f6babf92dbffdb3",
+  "seeds.lock.json": "8797dc18fbb7178bb0495aaa8e3312df0395dd7871ec7d966e81bf7bc3d432fc",
+  "test_evaluation_harness.py.orig": "03b567ca278616b46d55fd2ac8a76c8925012261593173aafb67a2e6b6ac14a1"
+ },
+ "freeze_version": "v1",
+ "note": "byte-identical copies; the live files are unchanged at the time of copying",
+ "status_at_archive": "approved; superseded by a re-freeze for two post-seed harness test corrections (Route A)"
+}

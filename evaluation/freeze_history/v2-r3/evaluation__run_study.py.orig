@@ -1,0 +1,830 @@
+"""Phase 6A formal-run driver (protocol revision 6).
+
+Run from the project root, and only after explicit mentor approval:
+
+    PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -m evaluation.run_study --pre-run-checks --out evaluation/results/<name>.json
+    PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -m evaluation.run_study --out evaluation/results/<name>.json
+
+The driver refuses to start unless the catalogue, protocol, seed and output
+checks all pass, and it creates its output file exclusively, so no existing
+file is ever overwritten. ``run`` is a pure function of a ``StudySpec`` and a
+seed map; the harness tests call it with a small synthetic study only.
+"""
+
+import argparse
+import hashlib
+import json
+import math
+import os
+import platform
+import sys
+from dataclasses import dataclass, field
+from fractions import Fraction
+from importlib.metadata import version
+from pathlib import Path
+
+import numpy as np
+import qiskit
+import qmutate
+from qiskit import QuantumCircuit
+from qiskit.circuit import Measure
+from qiskit.providers.basic_provider import BasicSimulator
+from qiskit.quantum_info import Statevector
+
+from qmutate import (
+    BaselineFailedError,
+    CandidateStatus,
+    EquivalenceModel,
+    check_equivalence,
+    classify_report,
+    distribution_oracle,
+    family_delta,
+    generate_removal_mutants,
+    run_removal_mutants,
+    sample_counts,
+    shots_for_threshold,
+)
+from qmutate.equivalence import _ideal_distribution
+from qmutate.mutation import _isolated_copy
+
+from evaluation import analysis, circuits, faults, study_config
+from evaluation.make_seeds import load_seeds
+from evaluation.suites import exact_distribution, make_oracle, measurement_free_state, state_difference
+
+D_NOT_EQUIVALENT = "D-NOT-EQUIVALENT"
+D_EQUIVALENT = "D-EQUIVALENT"
+D_UNKNOWN = "D-UNKNOWN"
+INVALID = "Invalid"
+FAULT_SETS = study_config.FAULT_SETS
+
+
+@dataclass(frozen=True)
+class CircuitSpec:
+    """One circuit of a study, with its frozen expectations."""
+
+    circuit_id: str
+    build: object
+    expected_distribution: dict
+    expected_state: object
+    num_clbits: int
+    applicability: tuple
+    t4_bit: int | None
+
+
+@dataclass(frozen=True)
+class FaultSpec:
+    """One hand-written fault of a study."""
+
+    fault_id: str
+    circuit_id: str
+    missing_gate: bool
+    build: object
+    expected_class: str
+
+
+@dataclass(frozen=True)
+class StudySpec:
+    """Everything ``run`` needs besides the seeds."""
+
+    circuits: tuple
+    faults: tuple
+    shots: dict
+    pre_run_shots: int = study_config.PRE_RUN_SHOTS
+    pre_run_delta: float = study_config.PRE_RUN_DELTA
+    pre_run_tolerance: float = study_config.PRE_RUN_EXACT_TOLERANCE
+    classifier_atol: float = study_config.CLASSIFIER_ATOL
+    group_atol: float = study_config.STATE_GROUP_ATOL
+    t6_atol: float = study_config.T6_ATOL
+    t6_slack: float = study_config.T6_GROUP_FLOAT_SLACK
+    fault_check_shots: int = study_config.FAULT_EXECUTION_CHECK_SHOTS
+    permutations: int = study_config.PERMUTATIONS
+    rq4_seeds: int = study_config.RQ4_EXTRA_SEEDS
+    oracle_target: float = study_config.ORACLE_TOLERANCE_TARGET
+    oracle_alpha: float = study_config.ORACLE_ALPHA
+    dedup_suites: tuple = study_config.DEDUP_SUITES
+    oracle_factory: object = None
+
+    def slots(self):
+        """Return the seed slots this study needs, in protocol order."""
+        return study_config.seed_slots(
+            [c.circuit_id for c in self.circuits], {c.circuit_id: c.applicability for c in self.circuits}, self.rq4_seeds
+        )
+
+
+@dataclass(frozen=True)
+class Paths:
+    """File locations the driver reads, writes or must protect."""
+
+    project: Path
+    results_dir: Path
+    seeds_file: Path
+    protected: tuple = field(default_factory=tuple)
+
+
+PROJECT = Path(__file__).resolve().parent.parent
+DEFAULT_PATHS = Paths(
+    project=PROJECT,
+    results_dir=PROJECT / study_config.RESULTS_DIR,
+    seeds_file=PROJECT / study_config.SEEDS_FILE,
+    protected=tuple(PROJECT / p for p in study_config.PROTECTED_PATHS),
+)
+
+
+def study_spec():
+    """Return the frozen Phase 6A study."""
+    circuit_specs = []
+    for circuit_id in circuits.CIRCUIT_IDS:
+        circuit_specs.append(CircuitSpec(
+            circuit_id=circuit_id,
+            build=lambda circuit_id=circuit_id: circuits.build_circuit(circuit_id),
+            expected_distribution=exact_distribution(circuits.expected_distribution(circuit_id)),
+            expected_state=circuits.expected_state(circuit_id),
+            num_clbits=circuits.circuit_shape(circuit_id)[1],
+            applicability=study_config.APPLICABILITY[circuit_id],
+            t4_bit=study_config.T4_BIT[circuit_id],
+        ))
+    fault_specs = tuple(
+        FaultSpec(f.fault_id, f.circuit_id, f.missing_gate,
+                  lambda fault_id=f.fault_id: faults.build_fault(fault_id), f.expected_class)
+        for f in faults.FAULTS
+    )
+    return StudySpec(circuits=tuple(circuit_specs), faults=fault_specs, shots=dict(study_config.SHOTS))
+
+
+def sha256_file(path):
+    """Return the SHA-256 hex digest of a file's bytes."""
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+OUTPUT_PREFIX = study_config.OUTPUT_PREFIX
+
+
+def check_output_path(out, paths, mode="full"):
+    """Return the reasons ``out`` may not be written in ``mode``; empty when it is acceptable.
+
+    Pre-run outputs must be named ``pre-run-*.json`` and full-run outputs
+    ``run-*.json``, so a readiness result can never take a formal result's name.
+    """
+    out = Path(out)
+    out = (out if out.is_absolute() else paths.project / out).resolve()
+    reasons = []
+    if out.suffix != ".json":
+        reasons.append("output must be a .json file")
+    if not out.name.startswith(OUTPUT_PREFIX[mode]):
+        reasons.append(f"a {mode} output must be named {OUTPUT_PREFIX[mode]}*.json")
+    if out.parent != paths.results_dir.resolve():
+        reasons.append(f"output must be directly inside {paths.results_dir}")
+    if out.exists():
+        reasons.append("output already exists; results are never overwritten")
+    for protected in paths.protected:
+        protected = protected.resolve()
+        if out == protected or protected in out.parents:
+            reasons.append(f"output is inside the protected path {protected}")
+    return reasons
+
+
+def _default_catalogue_checks():
+    from evaluation import check_catalogue
+
+    return check_catalogue.run_checks(check_catalogue.build_manifest())
+
+
+def _default_protocol_checks():
+    from evaluation import check_protocol
+
+    return check_protocol.run_checks()
+
+
+def _default_freeze_checks():
+    """Return the mandatory code-freeze checks; an approved, fully passing freeze is required.
+
+    The checker is imported here, not at module level, so ``check_code_freeze`` can
+    import this module without a cycle. Any exception becomes a failed check.
+    """
+    try:
+        from evaluation import check_code_freeze
+
+        return check_code_freeze.verify(require_approved=True)
+    except Exception as error:
+        return [(f"code freeze check raised {type(error).__name__}: {error}", False, "")]
+
+
+def integrity_failures(out, spec, paths=DEFAULT_PATHS, catalogue_checks=_default_catalogue_checks,
+                       protocol_checks=_default_protocol_checks, revision=study_config.PROTOCOL_REVISION,
+                       mode="full", freeze_checks=None):
+    """Return every reason the driver must refuse to start; empty when it may start.
+
+    The code-freeze check always runs. ``freeze_checks`` exists only so tests can
+    substitute it; ``main`` never passes it, so the default verification is used.
+    """
+    freeze_checks = _default_freeze_checks if freeze_checks is None else freeze_checks
+    freeze_results = freeze_checks()
+    failures = [f"freeze: {name}" for name, passed, _ in freeze_results if not passed]
+    if not freeze_results:
+        failures.append("freeze: no code-freeze checks ran")
+    failures += [f"catalogue: {name}" for name, passed, _ in catalogue_checks() if not passed]
+    failures += [f"protocol: {name}" for name, passed, _ in protocol_checks() if not passed]
+    if not paths.seeds_file.exists():
+        failures.append("seeds: seed file does not exist")
+    else:
+        try:
+            load_seeds(paths.seeds_file, spec.slots(), revision)
+        except (ValueError, KeyError, TypeError, AttributeError, json.JSONDecodeError) as error:
+            failures.append(f"seeds: {error}")
+    failures += [f"output: {reason}" for reason in check_output_path(out, paths, mode)]
+    source = qmutate_location()
+    expected = (PROJECT / study_config.QMUTATE_SOURCE).resolve()
+    if source != expected:
+        failures.append(f"qmutate: imported from outside {study_config.QMUTATE_SOURCE}; run with PYTHONPATH=src")
+    return failures
+
+
+def qmutate_location():
+    """Return the directory the running qmutate package was imported from."""
+    return Path(qmutate.__file__).resolve().parent
+
+
+def measurement_map(circuit):
+    """Return the ordered (qubit index, classical-bit index) pairs of the measurements."""
+    return [(circuit.find_bit(i.qubits[0]).index, circuit.find_bit(i.clbits[0]).index)
+            for i in circuit.data if isinstance(i.operation, Measure)]
+
+
+def independent_distribution(circuit):
+    """Return the exact classical distribution using ``Statevector`` and the study's own mapping."""
+    gates = QuantumCircuit(circuit.num_qubits)
+    writes = []
+    measured = set()
+    for instruction in circuit.data:
+        qubits = [circuit.find_bit(q).index for q in instruction.qubits]
+        if isinstance(instruction.operation, Measure):
+            writes.append((qubits[0], circuit.find_bit(instruction.clbits[0]).index))
+            measured.add(qubits[0])
+            continue
+        if measured.intersection(qubits):
+            raise ValueError("a gate acts on a measured qubit")
+        gates.append(instruction.operation, qubits)
+    width = circuit.num_clbits
+    result = {}
+    for basis, probability in enumerate(Statevector(gates).probabilities()):
+        if probability <= 1e-15:
+            continue
+        register = [0] * width
+        for qubit, clbit in writes:
+            register[clbit] = (basis >> qubit) & 1
+        key = "".join(str(register[i]) for i in reversed(range(width)))
+        result[key] = result.get(key, 0.0) + float(probability)
+    return result
+
+
+def _largest_difference(first, second):
+    keys = set(first) | set(second)
+    return max(abs(float(first.get(k, 0)) - float(second.get(k, 0))) for k in keys)
+
+
+def _epsilon(shots, outcomes, delta):
+    return 0.5 * (math.sqrt((outcomes - 1) / shots) + math.sqrt(2 * math.log(1 / delta) / shots))
+
+
+def pre_run_circuit(spec, circuit_spec, seeds):
+    """Return the pre-run check record of one circuit (section 3).
+
+    An exception raised by any check is recorded with its type and makes the
+    check fail, which stops the study before any suite runs.
+    """
+    try:
+        return _pre_run_checks(spec, circuit_spec, seeds)
+    except Exception as error:
+        return {"passed": False, "error_type": type(error).__name__, "error": str(error)}
+
+
+def t6_group_bound(spec, num_qubits):
+    """Return sqrt(2**n) * (T6 tolerance + pre-run state tolerance) + float slack (appendix A)."""
+    return math.sqrt(2 ** num_qubits) * (spec.t6_atol + spec.pre_run_tolerance) + spec.t6_slack
+
+
+def t6_condition(spec, num_qubits, maps_equal_original, total_variations):
+    """Return whether appendix A guarantees T6 detects every member of a group."""
+    bound = t6_group_bound(spec, num_qubits)
+    return bool(maps_equal_original) and all(tv is not None and tv > bound for tv in total_variations)
+
+
+def _pre_run_checks(spec, circuit_spec, seeds):
+    circuit = circuit_spec.build()
+    expected = circuit_spec.expected_distribution
+    tolerance = spec.pre_run_tolerance
+    statevector_distribution = independent_distribution(circuit)
+    classifier_distribution = _ideal_distribution(_isolated_copy(circuit))
+    state = state_difference(measurement_free_state(circuit), circuit_spec.expected_state)
+    shots = spec.pre_run_shots
+    counts = sample_counts(circuit, shots=shots, seed=seeds[f"pre_run/{circuit_spec.circuit_id}"])
+    outside = sorted(k for k, v in counts.items() if v > 0 and k not in expected)
+    distance = sum((abs(Fraction(counts.get(k, 0), shots) - expected.get(k, Fraction(0)))
+                    for k in set(counts) | set(expected)), Fraction(0)) / 2
+    epsilon = _epsilon(shots, 2 ** circuit_spec.num_clbits, spec.pre_run_delta)
+    record = {
+        "a_sums_exactly_to_one": sum(expected.values()) == 1,
+        "b_largest_difference": _largest_difference(statevector_distribution, expected),
+        "b_state_difference": state,
+        "c_largest_difference": _largest_difference(classifier_distribution, expected),
+        "d_shots": shots,
+        "d_outcomes_outside_support": outside,
+        "d_total_variation": distance,
+        "d_epsilon": epsilon,
+    }
+    record["passed"] = (
+        record["a_sums_exactly_to_one"]
+        and record["b_largest_difference"] <= tolerance
+        and state <= tolerance
+        and record["c_largest_difference"] <= tolerance
+        and not outside
+        and distance <= epsilon
+    )
+    return record
+
+
+def classify_fault(spec, fault_spec, original, seed):
+    """Return the classification record of one fault (section 5.2)."""
+    record = {"expected_class": fault_spec.expected_class, "missing_gate": fault_spec.missing_gate}
+    try:
+        circuit = fault_spec.build()
+    except Exception as error:
+        return dict(record, **{"class": INVALID, "invalid_stage": "build", "error_type": type(error).__name__})
+    try:
+        BasicSimulator().run(circuit, shots=spec.fault_check_shots, seed_simulator=seed).result()
+    except Exception as error:
+        return dict(record, **{"class": INVALID, "invalid_stage": "execution", "error_type": type(error).__name__})
+    try:
+        ideal = check_equivalence(original, circuit, model=EquivalenceModel.IDEAL_DISTRIBUTION,
+                                  atol=spec.classifier_atol)
+        unitary = check_equivalence(original, circuit, model=EquivalenceModel.UNITARY, atol=spec.classifier_atol)
+    except Exception as error:
+        return dict(record, **{"class": INVALID, "invalid_stage": "exact model", "error_type": type(error).__name__})
+    fault_class = {"equivalent": D_EQUIVALENT, "not_equivalent": D_NOT_EQUIVALENT}.get(ideal.verdict.value, D_UNKNOWN)
+    record.update({
+        "class": fault_class,
+        "ideal_verdict": ideal.verdict.value,
+        "ideal_reason": ideal.reason.value if ideal.reason else None,
+        "ideal_total_variation": ideal.total_variation,
+        "unitary_verdict": unitary.verdict.value,
+        "unitary_reason": unitary.reason.value if unitary.reason else None,
+        "matches_manifest": fault_class == fault_spec.expected_class,
+    })
+    return record
+
+
+def behaviour_groups(spec, circuit_spec, fault_specs, classes):
+    """Return the behaviour-equivalence groups of one circuit for both fault sets (section 5.4)."""
+    original = circuit_spec.build()
+    original_map = measurement_map(original)
+    bound = t6_group_bound(spec, original.num_qubits)
+    members = [f for f in fault_specs if classes[f.fault_id]["class"] == D_NOT_EQUIVALENT]
+    built = {f.fault_id: f.build() for f in members}
+    maps = {fault_id: measurement_map(c) for fault_id, c in built.items()}
+    states = {fault_id: measurement_free_state(c) for fault_id, c in built.items()}
+    comparisons = {}
+    ids = sorted(built)
+    for i, first in enumerate(ids):
+        for second in ids[i + 1:]:
+            comparisons[(first, second)] = {
+                "same_measurement_map": maps[first] == maps[second],
+                "state_difference": state_difference(states[first], states[second]),
+            }
+
+    def related(first, second):
+        comparison = comparisons[tuple(sorted((first, second)))]
+        return comparison["same_measurement_map"] and comparison["state_difference"] <= spec.group_atol
+
+    missing = {f.fault_id for f in members if f.missing_gate}
+    result = {
+        "comparisons": [dict(pair=list(pair), **value) for pair, value in sorted(comparisons.items())],
+        "t6_bound": bound,
+    }
+    for fault_set in FAULT_SETS:
+        selected = [fid for fid in ids if fault_set == "all" or fid not in missing]
+        groups, anomalies = analysis.group_components(selected, related)
+        t6_groups = []
+        t6_conditions = []
+        for group in groups:
+            if len(group) == 1:
+                t6_groups.append(group)
+                continue
+            same_as_original = all(maps[m] == original_map for m in group)
+            holds = t6_condition(spec, original.num_qubits, same_as_original,
+                                 [classes[m]["ideal_total_variation"] for m in group])
+            t6_conditions.append({"group": list(group), "map_equals_original": same_as_original,
+                                  "condition_holds": holds})
+            if holds:
+                t6_groups.append(group)
+            else:
+                t6_groups.extend((m,) for m in group)
+        result[fault_set] = {
+            "groups": [list(g) for g in groups],
+            "anomalies": [list(a) for a in anomalies],
+            "t6_groups": [list(g) for g in sorted(t6_groups)],
+            "t6_conditions": t6_conditions,
+        }
+    return result
+
+
+def _call(oracle, circuit):
+    try:
+        oracle(circuit)
+    except AssertionError:
+        return "fail", None
+    except Exception as error:
+        return "error", type(error).__name__
+    return "pass", None
+
+
+def _scores(classified):
+    metrics = classified.metrics()
+    eligible = metrics.killed + metrics.survived
+    return {
+        "killed": metrics.killed,
+        "survived": metrics.survived,
+        "errors": metrics.errors,
+        "not_run": metrics.not_run,
+        "equivalent_survived": metrics.equivalent_survived,
+        "equivalent_killed": metrics.equivalent_killed,
+        "equivalent_errors": metrics.equivalent_errors,
+        "adjusted_eligible": metrics.adjusted_eligible,
+        "adjusted_score": Fraction(metrics.killed, metrics.adjusted_eligible) if metrics.adjusted_eligible else None,
+        "unadjusted_score": Fraction(metrics.killed, eligible) if eligible else None,
+    }
+
+
+def _verdicts(classified):
+    return [None if r is None else {"verdict": r.verdict.value, "reason": r.reason.value if r.reason else None}
+            for r in classified.results]
+
+
+def removal_run(circuit_spec, oracle):
+    """Run and classify the removal mutants of one circuit under ``oracle``."""
+    report = run_removal_mutants(circuit_spec.build(), oracle, allow_barrier=True)
+    ideal = classify_report(circuit_spec.build(), report, model=EquivalenceModel.IDEAL_DISTRIBUTION)
+    unitary = classify_report(circuit_spec.build(), report, model=EquivalenceModel.UNITARY)
+    mutants = [{"index": r.candidate.index, "name": r.candidate.name, "outcome": r.outcome.value,
+                "error_type": r.error_type} for r in report.results]
+    ideal_verdicts = _verdicts(ideal)
+    unitary_verdicts = _verdicts(unitary)
+    for mutant, ideal_verdict, unitary_verdict in zip(mutants, ideal_verdicts, unitary_verdicts):
+        mutant["ideal"] = ideal_verdict
+        mutant["unitary"] = unitary_verdict
+    return {"mutants": mutants, "scores": _scores(ideal)}
+
+
+def _oracle_for(spec, circuit_spec, suite, seed):
+    if spec.oracle_factory is not None:
+        return spec.oracle_factory(spec, circuit_spec, suite, seed)
+    return make_oracle(suite, expected_distribution=circuit_spec.expected_distribution,
+                       expected_state=circuit_spec.expected_state, num_clbits=circuit_spec.num_clbits,
+                       t4_bit=circuit_spec.t4_bit, seed=seed, shots=spec.shots.get(suite))
+
+
+def run(spec, seeds, pre_run_only=False):
+    """Run the study described by ``spec`` with ``seeds`` and return the results body."""
+    order = []
+    deviations = []
+    by_circuit = {c.circuit_id: [f for f in spec.faults if f.circuit_id == c.circuit_id] for c in spec.circuits}
+
+    pre_run = {}
+    for circuit_spec in spec.circuits:
+        pre_run[circuit_spec.circuit_id] = pre_run_circuit(spec, circuit_spec, seeds)
+        order.append({"stage": "pre_run", "circuit": circuit_spec.circuit_id})
+    classes = {}
+    for circuit_spec in spec.circuits:
+        original = circuit_spec.build()
+        for fault_spec in by_circuit[circuit_spec.circuit_id]:
+            record = classify_fault(spec, fault_spec, original, seeds[f"pre_run/{circuit_spec.circuit_id}"])
+            classes[fault_spec.fault_id] = record
+            order.append({"stage": "classify_fault", "circuit": circuit_spec.circuit_id, "target": fault_spec.fault_id})
+            if record["class"] in (INVALID, D_UNKNOWN) or not record.get("matches_manifest", False):
+                deviations.append({"kind": "fault classification", "fault": fault_spec.fault_id,
+                                   "class": record["class"], "expected_class": record["expected_class"]})
+    groups = {}
+    for circuit_spec in spec.circuits:
+        groups[circuit_spec.circuit_id] = behaviour_groups(spec, circuit_spec, by_circuit[circuit_spec.circuit_id], classes)
+        order.append({"stage": "behaviour_groups", "circuit": circuit_spec.circuit_id})
+
+    body = {"mode": "pre_run_checks" if pre_run_only else "full", "pre_run": pre_run,
+            "fault_classification": classes, "behaviour_groups": groups, "execution_order": order,
+            "deviations": deviations, "stopped": None}
+    failed = sorted(c for c, record in pre_run.items() if not record["passed"])
+    if failed:
+        body["stopped"] = f"pre-run checks failed for {failed}"
+        return body
+    if pre_run_only:
+        return body
+
+    suites = {}
+    for circuit_spec in spec.circuits:
+        cid = circuit_spec.circuit_id
+        suites[cid] = {}
+        ne_faults = [f for f in by_circuit[cid] if classes[f.fault_id]["class"] == D_NOT_EQUIVALENT]
+        for suite in study_config.SUITES:
+            if suite not in circuit_spec.applicability:
+                continue
+            seed = seeds.get(f"primary/{cid}/{suite}")
+            oracle = _oracle_for(spec, circuit_spec, suite, seed)
+            status, error_type = _call(oracle, circuit_spec.build())
+            order.append({"stage": "original_suite", "circuit": cid, "suite": suite})
+            entry = {"seed": seed, "shots": spec.shots.get(suite),
+                     "original": {"status": status, "error_type": error_type}, "excluded": False}
+            suites[cid][suite] = entry
+            if status != "pass":
+                entry["excluded"] = True
+                deviations.append({"kind": "invalid original suite", "circuit": cid, "suite": suite,
+                                   "status": status, "error_type": error_type})
+                continue
+            try:
+                entry.update(removal_run(circuit_spec, oracle))
+            except BaselineFailedError as error:
+                entry["excluded"] = True
+                entry["baseline_error"] = type(error.__cause__).__name__ if error.__cause__ else None
+                deviations.append({"kind": "baseline failed", "circuit": cid, "suite": suite})
+                continue
+            order.append({"stage": "removal_mutants", "circuit": cid, "suite": suite,
+                          "target": f"{len(entry['mutants'])} candidates"})
+            outcomes = {}
+            for fault_spec in ne_faults:
+                status, error_type = _call(oracle, fault_spec.build())
+                outcomes[fault_spec.fault_id] = {
+                    "outcome": {"fail": analysis.DETECTED, "pass": analysis.UNDETECTED, "error": analysis.ERROR}[status],
+                    "error_type": error_type,
+                }
+                order.append({"stage": "fault", "circuit": cid, "suite": suite, "target": fault_spec.fault_id})
+            entry["faults"] = outcomes
+
+    rq3 = {}
+    for circuit_spec in spec.circuits:
+        cid = circuit_spec.circuit_id
+        generated = sum(c.status is CandidateStatus.GENERATED
+                        for c in generate_removal_mutants(circuit_spec.build(), allow_barrier=True))
+        oracle_shots = shots_for_threshold(spec.oracle_target, circuit_spec.num_clbits)
+        delta = family_delta(spec.oracle_alpha, generated + 2)
+        record = {"generated": generated, "shots": oracle_shots, "delta": delta, "seed": seeds[f"oracle/{cid}"]}
+        try:
+            oracle = distribution_oracle(circuit_spec.build(), shots=oracle_shots, seed=seeds[f"oracle/{cid}"],
+                                         delta=delta)
+            record.update(removal_run(circuit_spec, oracle))
+        except BaselineFailedError as error:
+            record["baseline_error"] = type(error.__cause__).__name__ if error.__cause__ else None
+            deviations.append({"kind": "oracle baseline failed", "circuit": cid})
+        except Exception as error:
+            record["oracle_error"] = type(error).__name__
+            deviations.append({"kind": "oracle error", "circuit": cid, "error_type": type(error).__name__})
+        order.append({"stage": "rq3_oracle", "circuit": cid})
+        t5 = suites[cid].get("T5")
+        if t5 and not t5["excluded"] and "scores" in record:
+            t5_score = t5["scores"]["adjusted_score"]
+            oracle_score = record["scores"]["adjusted_score"]
+            record["delta_c"] = t5_score - oracle_score if t5_score is not None and oracle_score is not None else None
+            table = {"both_killed": 0, "t5_only": 0, "oracle_only": 0, "both_survived": 0, "with_error": 0}
+            for t5_mutant, oracle_mutant in zip(t5["mutants"], record["mutants"]):
+                pair = (t5_mutant["outcome"], oracle_mutant["outcome"])
+                if "not_run" in pair:
+                    continue
+                if "error" in pair:
+                    table["with_error"] += 1
+                elif pair == ("killed", "killed"):
+                    table["both_killed"] += 1
+                elif pair == ("killed", "survived"):
+                    table["t5_only"] += 1
+                elif pair == ("survived", "killed"):
+                    table["oracle_only"] += 1
+                else:
+                    table["both_survived"] += 1
+            record["agreement_table"] = table
+        else:
+            record["delta_c"] = None
+        rq3[cid] = record
+
+    rq4 = {}
+    for circuit_spec in spec.circuits:
+        cid = circuit_spec.circuit_id
+        for suite in study_config.SAMPLING_SUITES:
+            if suite not in circuit_spec.applicability:
+                continue
+            key = f"{cid}/{suite}"
+            if suites[cid][suite]["excluded"]:
+                rq4[key] = {"skipped": "suite excluded in the primary run", "range": None}
+                continue
+            runs = []
+            for k in range(1, spec.rq4_seeds + 1):
+                seed = seeds[f"rq4/{cid}/{suite}/{k:02d}"]
+                oracle = _oracle_for(spec, circuit_spec, suite, seed)
+                try:
+                    result = removal_run(circuit_spec, oracle)
+                    runs.append({"seed": seed, "adjusted_score": result["scores"]["adjusted_score"],
+                                 "outcomes": [m["outcome"] for m in result["mutants"]]})
+                except BaselineFailedError:
+                    runs.append({"seed": seed, "adjusted_score": None, "baseline_failed": True})
+                order.append({"stage": "rq4", "circuit": cid, "suite": suite, "target": f"{k:02d}"})
+            defined = [r["adjusted_score"] for r in runs if r["adjusted_score"] is not None]
+            rq4[key] = {
+                "runs": runs,
+                "defined_scores": len(defined),
+                "minimum": min(defined) if defined else None,
+                "maximum": max(defined) if defined else None,
+                "range": max(defined) - min(defined) if len(defined) >= 2 else None,
+            }
+
+    statistics = {}
+    for fault_set in FAULT_SETS:
+        primary_points, dedup_points, baseline_points = {}, {}, {}
+        rates = {}
+        for circuit_spec in spec.circuits:
+            cid = circuit_spec.circuit_id
+            selected = [f.fault_id for f in by_circuit[cid] if classes[f.fault_id]["class"] == D_NOT_EQUIVALENT
+                        and (fault_set == "all" or not f.missing_gate)]
+            primary_points[cid], dedup_points[cid], baseline_points[cid] = [], [], []
+            for suite, entry in suites[cid].items():
+                if entry["excluded"]:
+                    continue
+                outcomes = {fid: entry["faults"][fid]["outcome"] for fid in selected}
+                primary = analysis.detection_rate(outcomes)
+                record = {"primary": primary}
+                score = entry["scores"]["adjusted_score"]
+                if score is not None and primary["rate"] is not None:
+                    primary_points[cid].append((score, primary["rate"]))
+                if suite in spec.dedup_suites:
+                    group_key = "t6_groups" if suite == "T6" else "groups"
+                    suite_groups = [tuple(g) for g in groups[cid][fault_set][group_key]]
+                    dedup = analysis.dedup_detection_rate(suite_groups, outcomes)
+                    record["dedup"] = dedup
+                    if score is not None and dedup["rate"] is not None:
+                        dedup_points[cid].append((score, dedup["rate"]))
+                    if score is not None and primary["rate"] is not None:
+                        baseline_points[cid].append((score, primary["rate"]))
+                rates[f"{cid}/{suite}"] = record
+        primary_seeds = {s: seeds[f"permutation/primary/{fault_set}/{s}"] for s in study_config.POOLED_STATISTICS}
+        dedup_seeds = {s: seeds[f"permutation/dedup_sensitivity/{fault_set}/{s}"]
+                       for s in study_config.POOLED_STATISTICS}
+        result = analysis.fault_set_statistics(primary_points, dedup_points, baseline_points,
+                                               primary_seeds, dedup_seeds, spec.permutations)
+        result["detection_rates"] = rates
+        statistics[fault_set] = result
+        order.append({"stage": "statistics", "target": fault_set})
+
+    body.update({
+        "suites": suites,
+        "rq3": rq3,
+        "rq4": rq4,
+        "statistics": statistics,
+        "hypotheses": {
+            "H1": {fault_set: statistics[fault_set]["h1"] for fault_set in FAULT_SETS},
+            "H3": analysis.h3_status({cid: record["delta_c"] for cid, record in rq3.items()}),
+            "H4": analysis.h4_status({key: record["range"] for key, record in rq4.items()}),
+            "p_values_affect_hypotheses": False,
+            "dedup_sensitivity_affects_h1": False,
+        },
+    })
+    return body
+
+
+def _json_default(value):
+    if isinstance(value, Fraction):
+        return f"{value.numerator}/{value.denominator}"
+    if isinstance(value, np.floating):
+        return float(value)
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if isinstance(value, (set, frozenset)):
+        return sorted(value)
+    raise TypeError(f"cannot serialize {type(value).__name__}")
+
+
+def to_json_bytes(document):
+    """Return the deterministic byte form of a results document."""
+    return (json.dumps(document, sort_keys=True, indent=1, default=_json_default, allow_nan=False) + "\n").encode()
+
+
+def write_results(out, data, paths=DEFAULT_PATHS, mode="full"):
+    """Write ``data`` to the new file ``out`` atomically, never overwriting anything.
+
+    The bytes go to an exclusively created hidden ``.partial`` file, which is
+    flushed and synced and then hard-linked to ``out``. The link fails if
+    ``out`` exists, so ``out`` either does not exist or holds the complete
+    data. The partial file is always removed.
+    """
+    reasons = check_output_path(out, paths, mode)
+    if reasons:
+        raise FileExistsError("; ".join(reasons))
+    out = Path(out)
+    out = out if out.is_absolute() else paths.project / out
+    out.parent.mkdir(exist_ok=True)
+    partial = out.with_name(f".{out.name}.partial")
+    try:
+        with open(partial, "xb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(partial, out)
+    finally:
+        partial.unlink(missing_ok=True)
+    return hashlib.sha256(data).hexdigest()
+
+
+def code_files(paths):
+    """Return the project-relative files whose hashes every results file records."""
+    root = paths.project
+    files = sorted(root.glob("evaluation/**/*.py")) + sorted(root.glob("src/qmutate/*.py"))
+    files += [root / "tests/test_evaluation_harness.py", root / "evaluation/CATALOGUE_FREEZE.md",
+              root / "pyproject.toml"]
+    return [f for f in files if f.is_file() and "__pycache__" not in f.parts]
+
+
+def code_hashes(paths):
+    """Return ``{relative path: SHA-256}`` for ``code_files``."""
+    return {str(f.relative_to(paths.project)): sha256_file(f) for f in code_files(paths)}
+
+
+def _optional_sha(path):
+    return sha256_file(path) if Path(path).is_file() else None
+
+
+def metadata(spec, paths, pre_run_only):
+    """Return the provenance block of a results document."""
+    root = paths.project
+    return {
+        "mode": "pre_run_checks" if pre_run_only else "full",
+        "protocol_revision": study_config.PROTOCOL_REVISION,
+        "protocol_sha256": sha256_file(root / study_config.PROTOCOL_FILE),
+        "protocol_lock_sha256": sha256_file(root / study_config.PROTOCOL_LOCK_FILE),
+        "catalogue_version": circuits.CATALOGUE_VERSION,
+        "catalogue_sha256": sha256_file(root / "evaluation/preflight/catalogue.py"),
+        "manifest_sha256": sha256_file(root / "evaluation/manifest.json"),
+        "seeds_sha256": sha256_file(paths.seeds_file),
+        "code_freeze_sha256": _optional_sha(root / study_config.CODE_FREEZE_FILE),
+        "code_freeze_lock_sha256": _optional_sha(root / study_config.CODE_FREEZE_LOCK_FILE),
+        "seeds_lock_sha256": _optional_sha(root / study_config.SEEDS_LOCK_FILE),
+        "qmutate_source": study_config.QMUTATE_SOURCE if qmutate_location()
+        == (PROJECT / study_config.QMUTATE_SOURCE).resolve() else "outside the project",
+        "code_sha256": code_hashes(paths),
+        "environment": {
+            "python": sys.version.split()[0],
+            "platform": platform.platform(),
+            "qiskit": qiskit.__version__,
+            "numpy": np.__version__,
+            "basic_simulator": BasicSimulator().backend_version,
+            "qmutate": version("qmutate"),
+            "environment_variables": {name: os.environ.get(name) for name in sorted(study_config.REQUIRED_ENVIRONMENT)},
+        },
+        "parameters": {
+            "shots": spec.shots,
+            "pre_run_shots": spec.pre_run_shots,
+            "pre_run_delta": spec.pre_run_delta,
+            "pre_run_tolerance": spec.pre_run_tolerance,
+            "classifier_atol": spec.classifier_atol,
+            "group_atol": spec.group_atol,
+            "t6_atol": spec.t6_atol,
+            "t6_slack": spec.t6_slack,
+            "fault_check_shots": spec.fault_check_shots,
+            "permutations": spec.permutations,
+            "rq4_seeds": spec.rq4_seeds,
+            "oracle_target": spec.oracle_target,
+            "oracle_alpha": spec.oracle_alpha,
+            "dedup_suites": list(spec.dedup_suites),
+        },
+    }
+
+
+def main(argv=None, paths=DEFAULT_PATHS):
+    """Check integrity, run the study and write the results file.
+
+    Exit status: 0 written and complete; 2 refused to start, or a usage error
+    from ``argparse``, with nothing run or written; 3 written but stopped by a
+    failed pre-run check; 4 run but not written because integrity changed;
+    1 an uncaught exception, with nothing written.
+    """
+    parser = argparse.ArgumentParser(prog="python -m evaluation.run_study")
+    parser.add_argument("--out", required=True)
+    parser.add_argument("--pre-run-checks", action="store_true")
+    args = parser.parse_args(argv)
+    spec = study_spec()
+    mode = "pre_run_checks" if args.pre_run_checks else "full"
+    failures = integrity_failures(args.out, spec, paths, mode=mode)
+    if failures:
+        print("refusing to start:")
+        for failure in failures:
+            print(f"  {failure}")
+        return 2
+    seeds = load_seeds(paths.seeds_file, spec.slots(), study_config.PROTOCOL_REVISION)
+    document = {"metadata": metadata(spec, paths, args.pre_run_checks)}
+    document.update(run(spec, seeds, pre_run_only=args.pre_run_checks))
+    after = integrity_failures(args.out, spec, paths, mode=mode)
+    if after or metadata(spec, paths, args.pre_run_checks) != document["metadata"]:
+        print("refusing to write: integrity changed during the run")
+        for failure in after:
+            print(f"  {failure}")
+        return 4
+    digest = write_results(args.out, to_json_bytes(document), paths, mode)
+    print(f"wrote {args.out} (sha256 {digest}); stopped: {document['stopped']}")
+    return 0 if document["stopped"] is None else 3
+
+
+if __name__ == "__main__":
+    sys.exit(main())

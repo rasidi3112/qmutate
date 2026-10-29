@@ -1,0 +1,372 @@
+"""Phase 6A code freeze: generate, verify, approve and extend ``evaluation/code_freeze.json``.
+
+Run from the project root, always with the documented environment:
+
+    VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -m evaluation.check_code_freeze
+    ... -m evaluation.check_code_freeze --write
+    ... -m evaluation.check_code_freeze --add-environment
+    ... -m evaluation.check_code_freeze --approve
+    ... -m evaluation.check_code_freeze --record-seeds
+
+Files and their roles:
+
+* ``code_freeze.json`` (the manifest) records content hashes of every covered file,
+  every outcome-affecting parameter, the seed-slot schema and each environment. It never
+  contains its own hash or the hash of its lock.
+* ``code_freeze.lock.json`` records the manifest's SHA-256 and its status (``proposed``
+  or ``approved``). It is the reference against which the manifest is verified; its own
+  content is the trust anchor, reported to the mentor and recorded in every results file.
+* ``seeds.lock.json``, created by ``--record-seeds`` after ``make_seeds``, binds the seed
+  file's SHA-256 to the slot schema and to the manifest's SHA-256, so the approved
+  manifest never changes when seeds are generated.
+
+``--write`` creates a new proposed manifest and lock and refuses if a manifest exists.
+``--add-environment`` adds the running environment to a proposed manifest if every other
+check passes. ``--approve`` sets the lock status to ``approved`` if every check passes.
+``--record-seeds`` requires an approved freeze, an existing seed file and no seeds lock.
+The checker never generates seeds, samples, or runs a suite.
+"""
+
+import hashlib
+import json
+import os
+import platform
+import sys
+from fractions import Fraction
+from importlib import import_module, metadata
+from pathlib import Path
+
+PROJECT = Path(__file__).resolve().parent.parent
+FREEZE_FILE = "evaluation/code_freeze.json"
+LOCK_FILE = "evaluation/code_freeze.lock.json"
+SEEDS_FILE = "evaluation/seeds.json"
+SEEDS_LOCK_FILE = "evaluation/seeds.lock.json"
+REQUIRED_ENVIRONMENT = {"VECLIB_MAXIMUM_THREADS": "1"}
+ENTRY_MODULES = (
+    "evaluation.run_study",
+    "evaluation.check_catalogue",
+    "evaluation.check_protocol",
+    "evaluation.check_code_freeze",
+    "evaluation.make_seeds",
+)
+RECORDED_DISTRIBUTIONS = ("qiskit", "numpy", "scipy", "rustworkx", "symengine", "dill", "stevedore", "sympy")
+
+
+def sha256_bytes(data):
+    """Return the SHA-256 hex digest of ``data``."""
+    return hashlib.sha256(data).hexdigest()
+
+
+def covered_files(root=PROJECT):
+    """Return ``{group: [project-relative paths]}`` of every file whose content the manifest hashes."""
+    def rel(paths):
+        return sorted(str(p.relative_to(root)) for p in paths if p.is_file())
+
+    return {
+        "evaluation_code": rel(list(root.glob("evaluation/*.py")) + list(root.glob("evaluation/preflight/*.py"))),
+        "qmutate_source": rel(list(root.glob("src/qmutate/*.py")) + [root / "src/qmutate/py.typed"]),
+        "harness_tests": rel([root / "tests/test_evaluation_harness.py"]),
+        "existing_tests": rel(p for p in root.glob("tests/*.py") if p.name != "test_evaluation_harness.py"),
+        "protocol": rel([root / "evaluation/PROTOCOL.md", root / "evaluation/protocol.lock.json"]),
+        "catalogue": rel([root / "evaluation/preflight/catalogue.py", root / "evaluation/manifest.json",
+                          root / "evaluation/CATALOGUE_FREEZE.md"]),
+        "preflight_evidence": rel([root / "evaluation/preflight/PREFLIGHT.md"]
+                                  + list(root.glob("evaluation/preflight/results/*.json"))),
+        "build": rel([root / "pyproject.toml"]),
+    }
+
+
+def file_hashes(root=PROJECT):
+    """Return ``{path: SHA-256}`` for every covered file."""
+    files = sorted({path for group in covered_files(root).values() for path in group})
+    return {path: sha256_bytes((root / path).read_bytes()) for path in files}
+
+
+def _plain(value):
+    if isinstance(value, Fraction):
+        return f"{value.numerator}/{value.denominator}"
+    if isinstance(value, dict):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_plain(v) for v in value]
+    return value
+
+
+def parameters():
+    """Return every outcome-affecting parameter, read from ``study_config`` and the study spec."""
+    from evaluation import run_study, study_config
+
+    spec = run_study.study_spec()
+    names = ("PROTOCOL_REVISION", "SUITES", "SAMPLING_SUITES", "SEEDED_SUITES", "DEDUP_SUITES", "SHOTS",
+             "T4_TOLERANCE", "T5_TOLERANCE", "T6_ATOL", "CLASSIFIER_ATOL", "PRE_RUN_EXACT_TOLERANCE",
+             "PRE_RUN_SHOTS", "PRE_RUN_DELTA", "STATE_GROUP_ATOL", "T6_GROUP_FLOAT_SLACK",
+             "FAULT_EXECUTION_CHECK_SHOTS", "APPLICABILITY", "T4_BIT", "RQ4_EXTRA_SEEDS", "PERMUTATIONS",
+             "ORACLE_ALPHA", "ORACLE_TOLERANCE_TARGET", "FAULT_SETS", "ANALYSES", "POOLED_STATISTICS",
+             "OUTPUT_PREFIX", "QMUTATE_SOURCE", "PROTECTED_PATHS", "REQUIRED_ENVIRONMENT")
+    values = {name: _plain(getattr(study_config, name)) for name in names}
+    slots = study_config.seed_slots()
+    values["seed_slot_count"] = len(slots)
+    values["seed_slot_schema_sha256"] = sha256_bytes("\n".join(slots).encode())
+    values["study_spec_matches_config"] = (
+        spec.shots == study_config.SHOTS
+        and spec.pre_run_shots == study_config.PRE_RUN_SHOTS
+        and spec.pre_run_delta == study_config.PRE_RUN_DELTA
+        and spec.pre_run_tolerance == study_config.PRE_RUN_EXACT_TOLERANCE
+        and spec.classifier_atol == study_config.CLASSIFIER_ATOL
+        and spec.group_atol == study_config.STATE_GROUP_ATOL
+        and spec.t6_atol == study_config.T6_ATOL
+        and spec.t6_slack == study_config.T6_GROUP_FLOAT_SLACK
+        and spec.fault_check_shots == study_config.FAULT_EXECUTION_CHECK_SHOTS
+        and spec.permutations == study_config.PERMUTATIONS
+        and spec.rq4_seeds == study_config.RQ4_EXTRA_SEEDS
+        and spec.oracle_target == study_config.ORACLE_TOLERANCE_TARGET
+        and spec.oracle_alpha == study_config.ORACLE_ALPHA
+        and spec.dedup_suites == study_config.DEDUP_SUITES
+        and spec.oracle_factory is None
+    )
+    return values
+
+
+def imported_project_modules(root=PROJECT):
+    """Import every entry point and return the project-relative files of all loaded project modules."""
+    for name in ENTRY_MODULES:
+        import_module(name)
+    files = set()
+    for module in list(sys.modules.values()):
+        location = getattr(module, "__file__", None)
+        if not location or location.startswith("<"):
+            continue
+        path = Path(location).resolve()
+        if PROJECT in path.parents and ".venv" not in path.parts:
+            files.add(str(path.relative_to(PROJECT)))
+    return sorted(files)
+
+
+def _qmutate_installation():
+    try:
+        distribution = metadata.distribution("qmutate")
+    except metadata.PackageNotFoundError:
+        return {"installed": False}
+    direct = distribution.read_text("direct_url.json")
+    editable = bool(direct and json.loads(direct).get("dir_info", {}).get("editable"))
+    return {"installed": True, "version": distribution.version, "editable": editable}
+
+
+def environment():
+    """Return a description of the running environment, without absolute paths."""
+    import numpy
+    import qiskit
+    import qmutate
+    from qiskit.providers.basic_provider import BasicSimulator
+
+    location = Path(qmutate.__file__).resolve().parent
+    source = (PROJECT / "src" / "qmutate").resolve()
+    blas = numpy.show_config(mode="dicts").get("Build Dependencies", {}).get("blas", {})
+    records = {}
+    for name in RECORDED_DISTRIBUTIONS:
+        try:
+            distribution = metadata.distribution(name)
+        except metadata.PackageNotFoundError:
+            continue
+        record = distribution.read_text("RECORD") or ""
+        records[name] = {"version": distribution.version, "record_sha256": sha256_bytes(record.encode())}
+    return {
+        "python": sys.version.split()[0],
+        "implementation": platform.python_implementation(),
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "qiskit": qiskit.__version__,
+        "numpy": numpy.__version__,
+        "numpy_blas": {"name": blas.get("name"), "version": blas.get("version")},
+        "basic_simulator": BasicSimulator().backend_version,
+        "qmutate_imported_from": "src/qmutate" if location == source else "outside the project",
+        "qmutate_installed_copy": _qmutate_installation(),
+        "environment_variables": {name: os.environ.get(name) for name in sorted(REQUIRED_ENVIRONMENT)},
+        "key_distributions": records,
+        "all_distributions": dict(sorted((d.metadata["Name"].lower(), d.version)
+                                         for d in metadata.distributions() if d.metadata["Name"])),
+    }
+
+
+def build_freeze(environments, root=PROJECT):
+    """Return a manifest of the project at ``root`` with the given environments."""
+    from evaluation import study_config
+
+    return {
+        "catalogue_version": "phase6a-catalogue-v1",
+        "protocol_revision": study_config.PROTOCOL_REVISION,
+        "covers": covered_files(root),
+        "files_sha256": file_hashes(root),
+        "parameters": parameters(),
+        "seeds": {"path": SEEDS_FILE, "hash_recorded_in": SEEDS_LOCK_FILE,
+                  "policy": "generated after approval; hash bound to this manifest by --record-seeds"},
+        "verified_without_content_hash": {
+            FREEZE_FILE: f"SHA-256 recorded in {LOCK_FILE}",
+            LOCK_FILE: "trust anchor; its content is reported to the mentor and recorded in results metadata",
+            SEEDS_LOCK_FILE: f"created by --record-seeds; binds {SEEDS_FILE} to this manifest's SHA-256",
+        },
+        "environments": dict(sorted(environments.items())),
+        "commands": {
+            "freeze_check": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 "
+                            "python -m evaluation.check_code_freeze",
+            "catalogue_check": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 "
+                               "python -m evaluation.check_catalogue",
+            "protocol_check": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 "
+                              "python -m evaluation.check_protocol",
+            "tests": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -W default "
+                     "-m pytest -p no:cacheprovider -q --no-header tests",
+        },
+    }
+
+
+def _serialize(document):
+    return (json.dumps(document, indent=1, sort_keys=True) + "\n").encode()
+
+
+def _write_exclusive(path, data):
+    with open(path, "xb") as handle:
+        handle.write(data)
+
+
+def _replace(path, data):
+    partial = path.with_name(f".{path.name}.partial")
+    try:
+        with open(partial, "xb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(partial, path)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def manifest_checks(freeze, root=PROJECT):
+    """Return ``(check, passed, detail)`` tuples comparing the project and environment with ``freeze``."""
+    results = []
+
+    def check(name, passed, detail=""):
+        results.append((name, bool(passed), detail))
+
+    current = file_hashes(root)
+    recorded = freeze.get("files_sha256", {})
+    check("covered file set unchanged (no file added or removed)", sorted(current) == sorted(recorded),
+          {"added": sorted(set(current) - set(recorded)), "removed": sorted(set(recorded) - set(current))})
+    changed = sorted(p for p in set(current) & set(recorded) if current[p] != recorded[p])
+    check("every covered file hash unchanged", not changed, changed)
+    imported = imported_project_modules(root)
+    check("every imported project module is covered", set(imported) <= set(recorded),
+          sorted(set(imported) - set(recorded)))
+    check("runtime parameters equal the freeze", parameters() == freeze.get("parameters"))
+    check("study spec defaults equal study_config", freeze.get("parameters", {}).get("study_spec_matches_config"))
+    variables = {name: os.environ.get(name) for name in REQUIRED_ENVIRONMENT}
+    check("required environment variables set", variables == REQUIRED_ENVIRONMENT, variables)
+    current_env = environment()
+    key = f"qiskit-{current_env['qiskit']}"
+    environments = freeze.get("environments", {})
+    check(f"environment {key} recorded", key in environments)
+    check(f"environment {key} unchanged", environments.get(key) == current_env)
+    check("qmutate imported from src/qmutate", current_env["qmutate_imported_from"] == "src/qmutate")
+    return results
+
+
+def verify(root=PROJECT, require_approved=False):
+    """Return every freeze check for the project at ``root``; any failure means fail closed."""
+    results = []
+
+    def check(name, passed, detail=""):
+        results.append((name, bool(passed), detail))
+
+    manifest_path, lock_path = root / FREEZE_FILE, root / LOCK_FILE
+    check("code freeze manifest exists", manifest_path.is_file())
+    check("code freeze lock exists", lock_path.is_file())
+    if not (manifest_path.is_file() and lock_path.is_file()):
+        return results
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+        lock = json.loads(lock_path.read_text())
+        freeze = json.loads(manifest_bytes)
+    except (OSError, ValueError) as error:
+        check("manifest and lock are readable JSON", False, str(error))
+        return results
+    check("manifest SHA-256 equals the lock", lock.get("sha256") == sha256_bytes(manifest_bytes), lock.get("sha256"))
+    status = lock.get("status")
+    check("lock status is proposed or approved", status in ("proposed", "approved"), status)
+    if require_approved:
+        check("code freeze approved", status == "approved", status)
+    results.extend(manifest_checks(freeze, root))
+    seeds, seeds_lock = root / SEEDS_FILE, root / SEEDS_LOCK_FILE
+    if seeds.exists() or seeds_lock.exists():
+        check("seeds file and seeds lock both exist", seeds.is_file() and seeds_lock.is_file())
+        if seeds.is_file() and seeds_lock.is_file():
+            bound = json.loads(seeds_lock.read_text())
+            check("seeds lock matches seeds.json, slot schema and manifest",
+                  bound == {"seeds_sha256": sha256_bytes(seeds.read_bytes()),
+                            "seed_slot_schema_sha256": freeze["parameters"]["seed_slot_schema_sha256"],
+                            "code_freeze_sha256": sha256_bytes(manifest_bytes)})
+    else:
+        check("seeds not generated yet", True)
+    return results
+
+
+def _report(results):
+    for name, passed, detail in results:
+        print(f"{'PASS' if passed else 'FAIL'}  {name}{'' if passed or not detail else '  ' + str(detail)}")
+    failed = [r for r in results if not r[1]]
+    print(f"{len(results) - len(failed)}/{len(results)} checks passed")
+    return not failed
+
+
+def main(argv, root=PROJECT):
+    """Run the requested freeze action, then verify."""
+    manifest_path, lock_path = root / FREEZE_FILE, root / LOCK_FILE
+    if "--write" in argv:
+        if manifest_path.exists() or lock_path.exists():
+            print("refusing: a manifest or lock already exists; a new freeze needs both removed deliberately")
+            return 1
+        data = _serialize(build_freeze({f"qiskit-{environment()['qiskit']}": environment()}, root))
+        _write_exclusive(manifest_path, data)
+        _write_exclusive(lock_path, _serialize({"manifest": FREEZE_FILE, "sha256": sha256_bytes(data),
+                                                "status": "proposed"}))
+        print(f"wrote {FREEZE_FILE} and {LOCK_FILE} (proposed)")
+    if "--add-environment" in argv:
+        results = verify(root)
+        lock = json.loads(lock_path.read_text()) if lock_path.exists() else {}
+        missing_only = [r for r in results if not r[1] and not r[0].startswith("environment qiskit-")]
+        if missing_only or lock.get("status") != "proposed":
+            print("refusing: only a proposed freeze whose other checks pass can gain an environment")
+            _report(results)
+            return 1
+        freeze = json.loads(manifest_path.read_text())
+        freeze["environments"][f"qiskit-{environment()['qiskit']}"] = environment()
+        data = _serialize(build_freeze(freeze["environments"], root))
+        _replace(manifest_path, data)
+        _replace(lock_path, _serialize({"manifest": FREEZE_FILE, "sha256": sha256_bytes(data), "status": "proposed"}))
+        print(f"added environment qiskit-{environment()['qiskit']}")
+    if "--approve" in argv:
+        results = verify(root)
+        if not all(r[1] for r in results):
+            print("refusing: approval needs every check to pass")
+            _report(results)
+            return 1
+        lock = json.loads(lock_path.read_text())
+        lock["status"] = "approved"
+        _replace(lock_path, _serialize(lock))
+        print("code freeze approved")
+    if "--record-seeds" in argv:
+        results = verify(root, require_approved=True)
+        seeds, seeds_lock = root / SEEDS_FILE, root / SEEDS_LOCK_FILE
+        if not all(r[1] for r in results if not r[0].startswith("seeds")) or not seeds.is_file() or seeds_lock.exists():
+            print("refusing: needs an approved, passing freeze, an existing seeds.json and no seeds lock")
+            return 1
+        manifest_bytes = manifest_path.read_bytes()
+        _write_exclusive(seeds_lock, _serialize({
+            "seeds_sha256": sha256_bytes(seeds.read_bytes()),
+            "seed_slot_schema_sha256": json.loads(manifest_bytes)["parameters"]["seed_slot_schema_sha256"],
+            "code_freeze_sha256": sha256_bytes(manifest_bytes),
+        }))
+        print(f"wrote {SEEDS_LOCK_FILE}")
+    return 0 if _report(verify(root, require_approved="--require-approved" in argv)) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,14 @@
+{
+ "date": "2026-10-29",
+ "deviation_from_protocol_wording": "PROTOCOL.md section 10 names --record-seeds as the command that creates seeds.lock.json",
+ "evidence": "rehearsal on scratch copies: the documented order (--approve, restore, --record-seeds) produced a byte-identical seeds.lock.json and lock; final trees of both orders byte-identical",
+ "freeze_version": "v2 (proposed at the time of binding)",
+ "method": "Route A-prime: seeds.json restored byte-identically from freeze_history/v1 and seeds.lock.json written before --approve, using check_code_freeze._serialize and sha256_bytes, instead of --record-seeds after approval, so that no state with an approved freeze and absent seeds ever exists",
+ "sha256": {
+  "evaluation/code_freeze.json": "7b980eb3ddc88d6ce9472d93c0708023261a423a6b903f19b5f855bc1d899dbc",
+  "evaluation/code_freeze.lock.json (expected after --approve)": "ea4f9a6d524722d12a127c8b416bf5f5ab126528e9b46839b1434fe16f1626e6",
+  "evaluation/code_freeze.lock.json (proposed)": "b2184b57d0b6a79349c3f92ed65a3f6ed1d24fcae3696c7fce071b04894ac780",
+  "evaluation/seeds.json": "15c2a225e3f880386976e75fd401b58a9c3f6630629a6c0c1f6babf92dbffdb3",
+  "evaluation/seeds.lock.json": "d49a3f5db3c0937a3c40385e19eb289f3beb9a2cf83a3dbeda14f03a1635cd5e"
+ }
+}

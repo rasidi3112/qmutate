@@ -1,0 +1,9 @@
+{
+ "new_code_freeze_sha256": "c9b67ef1f0e5990f24e580386ab4fbecfafe2ff6b4d940070f8a1ebd7edeee7c",
+ "new_seeds_lock_sha256": "f4c587246c1bc424ef714cbe7b9fb6978890be49b063447080ef053316256794",
+ "operation": "rebind-seeds",
+ "previous_code_freeze_sha256": "7b980eb3ddc88d6ce9472d93c0708023261a423a6b903f19b5f855bc1d899dbc",
+ "previous_seeds_lock_sha256": "d49a3f5db3c0937a3c40385e19eb289f3beb9a2cf83a3dbeda14f03a1635cd5e",
+ "seed_slot_schema_sha256": "1c37ddcdb9780134bee8abf349f372b0f22866f4b8f9387b28590877fbba3f45",
+ "seeds_sha256": "15c2a225e3f880386976e75fd401b58a9c3f6630629a6c0c1f6babf92dbffdb3"
+}

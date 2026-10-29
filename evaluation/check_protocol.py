@@ -1,0 +1,308 @@
+"""Consistency checks between ``PROTOCOL.md``, ``study_config.py`` and the frozen catalogue.
+
+Run from the project root:
+
+    PYTHONDONTWRITEBYTECODE=1 python -m evaluation.check_protocol
+    PYTHONDONTWRITEBYTECODE=1 python -m evaluation.check_protocol --write-lock
+
+The checks read files and build circuits but never simulate, sample or
+classify them, and run no T1-T6 suite. ``--write-lock`` records the current
+protocol hash; it is used only when a protocol revision is approved.
+"""
+
+import hashlib
+import json
+import re
+import sys
+from collections import Counter
+from pathlib import Path
+
+from evaluation import circuits, faults, study_config
+
+ROOT = Path(__file__).resolve().parent
+PROJECT = ROOT.parent
+PROTOCOL = PROJECT / study_config.PROTOCOL_FILE
+LOCK = PROJECT / study_config.PROTOCOL_LOCK_FILE
+MANIFEST = ROOT / "manifest.json"
+PREFLIGHT_RESULTS = ROOT / "preflight" / "results" / "validate-qiskit-2.6.1.json"
+SUBSCRIPTS = "₀₁₂"
+T4_EXPECTED = {"C1": "1/2", "C2": "1", "C3": "1", "C4": "1/32", "C5": "1/2", "C6": "3/4"}
+PREDICTED_GROUPS = {"all": (("C1-F05", "C1-F07"), ("C6-F04", "C6-F11")), "without_missing_gate": (("C6-F04", "C6-F11"),)}
+PREDICTED_NOT_GROUPED_MAP = (("C1-F05", "C1-F11"), ("C3-F02", "C3-F10"), ("C6-F07", "C6-F10"))
+
+
+def sha256(path):
+    """Return the SHA-256 hex digest of a file's bytes."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def table_row(text, first_cell):
+    """Return the protocol table line whose first cell is ``first_cell``."""
+    for line in text.splitlines():
+        cells = [cell.strip().replace("\0", "|") for cell in line.replace("\\|", "\0").strip().strip("|").split("|")]
+        if line.startswith("|") and cells and cells[0] == first_cell:
+            return cells
+    return None
+
+
+def measurement_map(fault_id):
+    """Return the ordered (qubit, clbit) pairs of a fault's measurements."""
+    return [tuple(op[1:]) for op in faults.fault_operations(fault_id) if op[0] == "measure"]
+
+
+def run_checks():
+    """Return a list of ``(check, passed, detail)`` tuples."""
+    results = []
+
+    def check(name, passed, detail=""):
+        results.append((name, bool(passed), detail))
+
+    text = PROTOCOL.read_text()
+    lock = json.loads(LOCK.read_text()) if LOCK.exists() else None
+    check("protocol lock exists", lock is not None)
+    if lock is not None:
+        check("protocol hash matches lock", lock["sha256"] == sha256(PROTOCOL), lock.get("sha256"))
+        check("lock revision equals study_config revision", lock["revision"] == study_config.PROTOCOL_REVISION)
+    check("protocol states its revision", f"| Protocol revision | **{study_config.PROTOCOL_REVISION}** |" in text)
+
+    manifest = json.loads(MANIFEST.read_text())
+    rows = manifest["faults"]
+    not_equivalent = [r for r in rows if r["expected_class"] == faults.D_NOT_EQUIVALENT]
+    totals = {
+        "Faults": len(rows),
+        "D-NOT-EQUIVALENT": len(not_equivalent),
+        "D-EQUIVALENT": len(rows) - len(not_equivalent),
+        "`missing_gate`": sum(r["tag"] == "missing_gate" for r in rows),
+        "D-NOT-EQUIVALENT without `missing_gate`": sum(r["tag"] != "missing_gate" for r in not_equivalent),
+    }
+    check("manifest totals are 70/57/13/17/43", list(totals.values()) == [70, 57, 13, 17, 43], totals)
+    check("protocol states the confirmed totals",
+          "**70 faults; 57 D-NOT-EQUIVALENT; 13 D-EQUIVALENT; 17 `missing_gate`; 43 D-NOT-EQUIVALENT faults without" in text)
+    for label in totals:
+        expected = []
+        for circuit_id in circuits.CIRCUIT_IDS:
+            subset = [r for r in rows if r["circuit"] == circuit_id]
+            sub_ne = [r for r in subset if r["expected_class"] == faults.D_NOT_EQUIVALENT]
+            value = {
+                "Faults": len(subset),
+                "D-NOT-EQUIVALENT": len(sub_ne),
+                "D-EQUIVALENT": len(subset) - len(sub_ne),
+                "`missing_gate`": sum(r["tag"] == "missing_gate" for r in subset),
+                "D-NOT-EQUIVALENT without `missing_gate`": sum(r["tag"] != "missing_gate" for r in sub_ne),
+            }[label]
+            expected.append(str(value))
+        expected.append(str(totals[label]))
+        check(f"section 5.1 row '{label}' matches manifest", table_row(text, label) == [label] + expected,
+              table_row(text, label))
+
+    counts = {c: len(s) for c, s in study_config.APPLICABILITY.items()}
+    check("applicability suite counts 5/6/6/5/4/4", list(counts.values()) == [5, 6, 6, 5, 4, 4], counts)
+    for circuit_id in circuits.CIRCUIT_IDS:
+        row = table_row(text, circuit_id)
+        applicable = study_config.APPLICABILITY[circuit_id]
+        mode = study_config.expected_mode(circuit_id)
+        support = study_config.expected_support(circuit_id)
+        full = len(support) == 2 ** circuits.circuit_shape(circuit_id)[1]
+        bit = study_config.T4_BIT[circuit_id]
+        marginal = study_config.expected_marginal(circuit_id)
+        numerator, _, denominator = T4_EXPECTED[circuit_id].partition("/")
+        stated = int(numerator) / int(denominator or 1)
+        consistent = (
+            row is not None
+            and ("T2" in applicable) == (mode is not None)
+            and ("T3" in applicable) == (not full)
+            and row[1] == "✓" and row[5] == "✓" and row[6] == "✓"
+            and row[2].startswith("✓") == ("T2" in applicable)
+            and row[3].startswith("✓") == ("T3" in applicable)
+            and row[4] == f"c{SUBSCRIPTS[bit]}, {T4_EXPECTED[circuit_id]}"
+            and abs(marginal - stated) <= 1e-12
+            and row[7] == str(len(applicable))
+            and (mode is None or f"`{mode}`" in row[2])
+        )
+        check(f"{circuit_id} applicability row consistent with config and expected values", consistent, row)
+
+    shots = {"T1": "16", "T2": "1,000", "T3": "100", "T4": "4,000", "T5": "8,000"}
+    for suite, stated in shots.items():
+        row = next((r for r in (table_row(text, f"{suite} {n}") for n in
+                                ("run", "mode", "support", "marginal", "distribution")) if r), None)
+        check(f"{suite} shots in protocol equal study_config",
+              row is not None and row[2].startswith(stated) and f"{study_config.SHOTS[suite]:,}" == stated, row)
+
+    slots = study_config.seed_slots()
+    kinds = Counter(slot.split("/")[0] for slot in slots)
+    check("404 unique seed slots", len(slots) == 404 == len(set(slots)), len(slots))
+    check("seed slot breakdown 24/360/6/6/8",
+          [kinds["primary"], kinds["rq4"], kinds["oracle"], kinds["pre_run"], kinds["permutation"]] == [24, 360, 6, 6, 8],
+          dict(kinds))
+    check("protocol states 404 slots and the breakdown",
+          "(404 slots, in this order)" in text and all(f"| {n} |" in text for n in (24, 360, 6, 8)))
+    check("seed slots follow the documented order",
+          slots[0] == "primary/C1/T1" and slots[24] == "rq4/C1/T3/01" and slots[-1].startswith("permutation/"))
+
+    mentioned = set(re.findall(r"C[1-6]-F\d{2}", text))
+    known = set(faults.FAULT_IDS)
+    check("every fault id in the protocol exists", mentioned <= known, sorted(mentioned - known))
+    section_12 = text.split("## 12.")[1].split("## 13.")[0]
+    bullets = {item.split("**")[1]: item for item in section_12.split("\n- ")[1:]}
+    seed_line = bullets["Seed-sensitive (preliminary):"]
+    check("seed-sensitive list equals faults.SEED_SENSITIVE",
+          set(re.findall(r"C[1-6]-F\d{2}", seed_line)) == set(faults.SEED_SENSITIVE))
+    border_line = bullets["Borderline:"]
+    check("borderline list equals faults.BORDERLINE", set(re.findall(r"C[1-6]-F\d{2}", border_line)) == set(faults.BORDERLINE))
+    t6_text = section_12.split("Not detectable by T6")[1]
+    measurement_only = {r["id"] for r in rows if r["measurement_only"]}
+    check("T6-undetectable list equals measurement-only faults", set(re.findall(r"C[1-6]-F\d{2}", t6_text)) == measurement_only)
+    section_5 = text.split("### 5.4")[1].split("## 6.")[0]
+    redundant = {tuple(sorted(g)) for g in faults.REDUNDANT_GROUPS}
+    check("section 5.4 names every preflight same-distribution fault",
+          {f for g in redundant for f in g} <= set(re.findall(r"C[1-6]-F\d{2}", section_5)))
+
+    preflight = json.loads(PREFLIGHT_RESULTS.read_text())["faults"]
+    for fault_set, groups in PREDICTED_GROUPS.items():
+        for group in groups:
+            members = [faults.get_fault(f) for f in group]
+            ok = (
+                len({m.circuit_id for m in members}) == 1
+                and all(m.expected_class == faults.D_NOT_EQUIVALENT for m in members)
+                and (fault_set == "all" or all(not m.missing_gate for m in members))
+            )
+            same_distribution = len({tuple(sorted((k, round(v, 12)) for k, v in
+                                                  preflight[f]["distribution_independent"].items()))
+                                     for f in group}) == 1
+            same_map = len({tuple(measurement_map(f)) for f in group}) == 1
+            check(f"predicted group {group} ({fault_set}): same circuit, NE, same distribution, same measurement map",
+                  ok and same_distribution and same_map)
+    for first, second in PREDICTED_NOT_GROUPED_MAP:
+        check(f"{first} and {second} differ in measurement map", measurement_map(first) != measurement_map(second))
+    for fault_set, stated in (("all", [8, 10, 10, 10, 9, 8]), ("without_missing_gate", [7, 7, 7, 9, 6, 6])):
+        merged = Counter(faults.get_fault(g[0]).circuit_id for g in PREDICTED_GROUPS[fault_set])
+        computed = []
+        for circuit_id in circuits.CIRCUIT_IDS:
+            members = [r for r in not_equivalent if r["circuit"] == circuit_id
+                       and (fault_set == "all" or r["tag"] != "missing_gate")]
+            computed.append(len(members) - merged[circuit_id])
+        check(f"predicted group counts ({fault_set}) equal the protocol", computed == stated, computed)
+
+    results_dir = PROJECT / study_config.RESULTS_DIR
+    protected = [PROJECT / p for p in study_config.PROTECTED_PATHS]
+    check("results directory is not a protected path",
+          all(results_dir != p and p not in results_dir.parents for p in protected))
+    check("seeds file and preflight evidence are protected",
+          study_config.SEEDS_FILE in study_config.PROTECTED_PATHS and "evaluation/preflight" in study_config.PROTECTED_PATHS)
+    commands = text.split("## 16.")[1]
+    outputs = re.findall(r"--out (\S+)", commands)
+    check("every --out is a distinct file under evaluation/results/",
+          outputs and len(outputs) == len(set(outputs)) and all(o.startswith(study_config.RESULTS_DIR + "/") for o in outputs),
+          outputs)
+    check("repeated-run comparison compares the two run outputs",
+          re.search(r"cmp (\S+-a\.json) (\S+-b\.json)", commands) is not None)
+    check("deduplication scope is T2-T6 in study_config", study_config.DEDUP_SUITES == ("T2", "T3", "T4", "T5", "T6"))
+    check("protocol excludes T1 from the deduplication analysis",
+          "T1 is excluded from the deduplication sensitivity analysis" in text)
+    check("revision 2 overbroad deduplication claim withdrawn", "Why this suffices" not in text)
+    check("protocol states the T6 grouping condition with slack", "√N·(1e-8 + 1e-12) + 1e-10" in text)
+    check("deduplication described as approximate state equivalence",
+          "sensitivity analysis based on approximate state equivalence" in text
+          and "No claim is made that their pass/fail probabilities are equal" in text
+          and "Equal in distribution only" not in text)
+    check("matched-suite baseline named and old name gone",
+          "matched-suite baseline" in text and "comparison baseline" not in text)
+    check("appendix A derivation present", "## Appendix A. T6 grouping guarantee" in text)
+    appendix = text.split("## Appendix A.")[1] if "## Appendix A." in text else ""
+    for circuit_id in circuits.CIRCUIT_IDS:
+        n = circuits.expected_state(circuit_id).size.bit_length() - 1
+        bound = (2 ** n) ** 0.5 * (study_config.T6_ATOL + study_config.PRE_RUN_EXACT_TOLERANCE) \
+            + study_config.T6_GROUP_FLOAT_SLACK
+        stated = f"{bound:.4e}".replace("e-0", "e-")
+        check(f"appendix A bound for {circuit_id} (n = {n}) matches study_config",
+              f"| {n} | {stated} |" in appendix, stated)
+    check("T1 semantics stated", "T1 is **invalid** for that circuit" in text and "**detected** by T1" in text)
+    check("pre-run sampling is a readiness check only", "is a **readiness check only**" in text)
+    flat = " ".join(text.split())
+    check("float slack documented as heuristic, not a proven bound",
+          flat.count("heuristic engineering margin, not a proven floating-point error bound") >= 2
+          and "so the strict inequality survives rounding" not in flat)
+    check("output name prefixes in protocol equal study_config.OUTPUT_PREFIX",
+          study_config.OUTPUT_PREFIX == {"pre_run_checks": "pre-run-", "full": "run-"}
+          and "`pre-run-*.json`" in text and "`run-*.json`" in text)
+    lines = [line for line in commands.splitlines() if "--out" in line]
+    check("section 16 output names follow the mode prefixes",
+          bool(lines) and all(
+              re.search(r"--out \S+/" + ("pre-run-" if "--pre-run-checks" in line else "run-"), line)
+              for line in lines))
+    python_lines = [line for line in commands.splitlines() if "python -" in line and not line.startswith("`")]
+    check("every section 16 python command sets VECLIB_MAXIMUM_THREADS=1 and PYTHONPATH=src",
+          bool(python_lines) and all(line.startswith("VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src ") for line in python_lines))
+    check("study_config requires VECLIB_MAXIMUM_THREADS=1",
+          study_config.REQUIRED_ENVIRONMENT == {"VECLIB_MAXIMUM_THREADS": "1"})
+    check("code-freeze files are protected output paths",
+          {study_config.CODE_FREEZE_FILE, study_config.CODE_FREEZE_LOCK_FILE, study_config.SEEDS_LOCK_FILE}
+          <= set(study_config.PROTECTED_PATHS))
+    check("protocol states the mandatory fail-closed freeze check and manifest verification",
+          "mandatory **code-freeze check**" in text and "**fails closed**" in text
+          and "never contains its own hash" in text and "check_code_freeze --record-seeds" in text)
+    check("section 16 starts and ends with the approved freeze check",
+          bool(python_lines) and "check_code_freeze --require-approved" in python_lines[0]
+          and "check_code_freeze --require-approved" in python_lines[-3])
+    check("protocol states the qmutate source requirement", "imported from this project's `src/qmutate`" in text)
+    check("study_config accepts seed files of revisions 6 to the current revision",
+          study_config.SEED_FILE_REVISIONS == (6, 7, 8, 9)
+          and study_config.PROTOCOL_REVISION in study_config.SEED_FILE_REVISIONS)
+    check("protocol states the accepted seed file revisions", "`study_config.SEED_FILE_REVISIONS` = (6, 7, 8, 9)" in text
+          and "its revision is in `study_config.SEED_FILE_REVISIONS`" in text)
+    check("protocol defines the re-freeze procedure with existing seeds",
+          "**Re-freeze when seeds already exist** (revisions 7 to 9)" in text
+          and "check_code_freeze --retire <H>" in text and "check_code_freeze --rebind-seeds <H>" in text
+          and "`seeds.json` is never written" in text and "**not** atomic" in text)
+    check("old removal wording replaced by --retire", "A new freeze requires deliberately removing both files" not in text)
+    check("protocol defines rejection, full rollback, history directories and recovery by state",
+          "**Rejecting a proposed freeze.**" in text and "check_code_freeze --reject <H>" in text
+          and "(full rollback)" in text and "**History directories.**" in text and "**Recovery by state.**" in text
+          and "Full rollback to the outgoing freeze:" not in text)
+    check("protocol defines the seed history check",
+          "**Seed history.**" in text and "the **seed history** matches" in text
+          and "`evaluation/freeze_history/SEEDS_RECORD.json`" in text)
+    check("protocol keeps partial files as evidence",
+          "The tools never remove a partial file" in text and "partial file is always removed" not in text)
+    check("protocol anchors existing seeds in the manifest and states the limit of the guarantee",
+          "**Seed anchor in the manifest.**" in text and "(`seeds.sha256`)" in text
+          and "**Limit of the seed guarantee.**" in text and "external, trusted anchor" in text)
+    check("protocol requires valid seed content and an interruption-safe seed write",
+          "**Seed file content.**" in text and "`.seeds.json.partial`" in text
+          and "it is a valid seed file" in text and "`make_seeds` was interrupted" in text)
+    check("protocol states that each freeze action runs on its own",
+          "**Each freeze action runs on its own.**" in text and "`qiskit-2.0.3` and `qiskit-2.6.1`" in text)
+    check("protocol lists code hashes and exit statuses",
+          "`code_sha256`" in text and "**Exit statuses:**" in text)
+    return results
+
+
+def state_report():
+    """Return informational facts about generated files; never part of the consistency checks."""
+    results_dir = PROJECT / study_config.RESULTS_DIR
+    return {
+        "seeds.json exists": (PROJECT / study_config.SEEDS_FILE).exists(),
+        "results files": sorted(p.name for p in results_dir.iterdir()) if results_dir.exists() else [],
+    }
+
+
+def main(argv):
+    """Write the lock if requested, then run every check."""
+    if "--write-lock" in argv:
+        LOCK.write_text(json.dumps({
+            "revision": study_config.PROTOCOL_REVISION,
+            "path": study_config.PROTOCOL_FILE,
+            "sha256": sha256(PROTOCOL),
+        }, indent=1) + "\n")
+        print(f"wrote {study_config.PROTOCOL_LOCK_FILE}")
+    results = run_checks()
+    for name, passed, detail in results:
+        print(f"{'PASS' if passed else 'FAIL'}  {name}{'' if passed or not detail else '  ' + str(detail)}")
+    failed = [r for r in results if not r[1]]
+    print(f"state (informational): {state_report()}")
+    print(f"{len(results) - len(failed)}/{len(results)} checks passed")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

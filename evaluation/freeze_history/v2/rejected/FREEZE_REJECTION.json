@@ -1,0 +1,22 @@
+{
+ "operation": "reject",
+ "rejected_files_sha256": {
+  "evaluation/PROTOCOL.md": "12debac3baeef01e7bee3495e8a3722b3073ab393df2423b09e350563008036b",
+  "evaluation/analysis.py": "94707180c9165c5777e0041615e4f3cf2bd9a3ae086e4deb14c9767acad1984f",
+  "evaluation/check_code_freeze.py": "61513a9b2d621c053cd643be9d46f167df791b5294c13f96c6c83bba72769882",
+  "evaluation/check_protocol.py": "23c32580d9eb7ee0842b032436e09d5c12dc3f4a1261a5f96ff3e3ea29317620",
+  "evaluation/make_seeds.py": "e09e1312ce279a7b5bab0520fe5501b8b7e99e13dfb6ed32df352f60f541de36",
+  "evaluation/protocol.lock.json": "2b1702dea298af766767bc1240d1358402c12c0a7744511af119b6f2a574133a",
+  "evaluation/run_study.py": "0d92e8024a267fdc14b36763b7ef5a108ff6ad778b85effbe0e93a283c3803db",
+  "evaluation/study_config.py": "9a6fdf4774c4450612150fa9c1231a90a67da6169e89b377558145e39f1b04aa",
+  "evaluation/suites.py": "a75a1d9daec1e2aa1ee01540c3da8ebfa0b9ae7f2e08d5c882b88ab0b6b364aa",
+  "tests/test_evaluation_harness.py": "4e707632d584bc19bf3ff2144b451ebc6677017d4e2022198272fd9746ec7daf"
+ },
+ "rejected_lock_sha256": "aa37bc5a88ea7aefbc35bb09589f63b81162391e6c56c23f39adfe0d4a9ccb56",
+ "rejected_manifest_sha256": "40788a9c1afed897cd23474dc2bf2df6ec95a58c0c6b6d941fb93cac4ce25565",
+ "rejected_seeds_lock_sha256": "a2eaa007164381434b2061d8a3139e66b5c1d787fff1df5b722728fe8fe1255a",
+ "restored_lock_sha256": "ea4f9a6d524722d12a127c8b416bf5f5ab126528e9b46839b1434fe16f1626e6",
+ "restored_manifest_sha256": "7b980eb3ddc88d6ce9472d93c0708023261a423a6b903f19b5f855bc1d899dbc",
+ "restored_seeds_lock_sha256": "d49a3f5db3c0937a3c40385e19eb289f3beb9a2cf83a3dbeda14f03a1635cd5e",
+ "seeds_sha256": "15c2a225e3f880386976e75fd401b58a9c3f6630629a6c0c1f6babf92dbffdb3"
+}

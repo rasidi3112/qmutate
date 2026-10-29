@@ -1,0 +1,7 @@
+{
+ "lock_sha256": "ea4f9a6d524722d12a127c8b416bf5f5ab126528e9b46839b1434fe16f1626e6",
+ "lock_status": "approved",
+ "manifest_sha256": "7b980eb3ddc88d6ce9472d93c0708023261a423a6b903f19b5f855bc1d899dbc",
+ "operation": "retire",
+ "retired_protocol_revision": 6
+}

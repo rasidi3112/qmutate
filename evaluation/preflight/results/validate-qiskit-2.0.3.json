@@ -1,0 +1,4124 @@
+{
+ "environment": {
+  "python": "3.11.14",
+  "platform": "macOS-27.0-arm64-arm-64bit",
+  "qiskit": "2.0.3",
+  "numpy": "2.4.6",
+  "basic_simulator_backend_version": "0.1",
+  "qmutate": "0.1.0"
+ },
+ "tolerances": {
+  "classifier_atol": 1e-08,
+  "state_atol": 1e-08,
+  "agreement_tv": 1e-09
+ },
+ "self_checks": {
+  "unwritten bits stay 0": true,
+  "last write wins": true,
+  "last write wins (to 1)": true,
+  "one qubit into two bits": true
+ },
+ "originals": {
+  "C1": {
+   "instructions": 6,
+   "barriers": 0,
+   "tv_independent_vs_documented": 1.1102230246251565e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "state_abs_overlap": 0.9999999999999998,
+   "state_global_phase_rad": 0.0,
+   "state_max_abs_difference_after_phase": 0.0,
+   "state_within_tolerance": true,
+   "unsupported_gates": [],
+   "reproducible": true
+  },
+  "C2": {
+   "instructions": 17,
+   "barriers": 0,
+   "tv_independent_vs_documented": 7.216449660063518e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "state_abs_overlap": 0.9999999999999992,
+   "state_global_phase_rad": 0.0,
+   "state_max_abs_difference_after_phase": 4.440892098500626e-16,
+   "state_within_tolerance": true,
+   "unsupported_gates": [],
+   "reproducible": true
+  },
+  "C3": {
+   "instructions": 14,
+   "barriers": 0,
+   "tv_independent_vs_documented": 5.551115123125783e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "state_abs_overlap": 0.9999999999999993,
+   "state_global_phase_rad": 0.0,
+   "state_max_abs_difference_after_phase": 3.3306690738754696e-16,
+   "state_within_tolerance": true,
+   "unsupported_gates": [],
+   "reproducible": true
+  },
+  "C4": {
+   "instructions": 46,
+   "barriers": 0,
+   "tv_independent_vs_documented": 2.1159289598227105e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "state_abs_overlap": 0.999999999999998,
+   "state_global_phase_rad": 0.0,
+   "state_max_abs_difference_after_phase": 1.887379141862766e-15,
+   "state_within_tolerance": true,
+   "unsupported_gates": [],
+   "reproducible": true
+  },
+  "C5": {
+   "instructions": 12,
+   "barriers": 0,
+   "tv_independent_vs_documented": 2.220446049250313e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "state_abs_overlap": 0.9999999999999997,
+   "state_global_phase_rad": 8.110580655868087e-16,
+   "state_max_abs_difference_after_phase": 6.467559426203882e-16,
+   "state_within_tolerance": true,
+   "unsupported_gates": [],
+   "reproducible": true
+  },
+  "C6": {
+   "instructions": 10,
+   "barriers": 0,
+   "tv_independent_vs_documented": 1.6653345369377348e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "state_abs_overlap": 0.9999999999999998,
+   "state_global_phase_rad": 0.0,
+   "state_max_abs_difference_after_phase": 5.551115123125783e-17,
+   "state_within_tolerance": true,
+   "unsupported_gates": [],
+   "reproducible": true
+  }
+ },
+ "c4_index_checks": {
+  "initial H": true,
+  "oracle 1": true,
+  "diffuser 1": true,
+  "oracle 2": true,
+  "diffuser 2": true,
+  "measurements": true,
+  "length": 46,
+  "with_barriers_instructions": 51,
+  "with_barriers_first_measurement": 48,
+  "with_barriers_tv_vs_barrier_free": 0.0
+ },
+ "faults": {
+  "C1-F01": {
+   "circuit": "C1",
+   "category": "wrong gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 6,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.5,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.5,
+   "distribution_independent": {
+    "111": 1.0
+   },
+   "distribution_catalogue": {
+    "111": 1.0
+   },
+   "tv_independent_vs_catalogue": 0.0,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "111",
+     1.0
+    ]
+   ]
+  },
+  "C1-F02": {
+   "circuit": "C1",
+   "category": "wrong angle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 6,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.2500000000000001,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.2500000000000001,
+   "distribution_independent": {
+    "000": 0.7500000000000001,
+    "111": 0.24999999999999994
+   },
+   "distribution_catalogue": {
+    "000": 0.75,
+    "111": 0.25
+   },
+   "tv_independent_vs_catalogue": 8.326672684688674e-17,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.75
+    ],
+    [
+     "111",
+     0.25
+    ]
+   ]
+  },
+  "C1-F03": {
+   "circuit": "C1",
+   "category": "wrong angle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 6,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.049916708323414105,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.049916708323414105,
+   "distribution_independent": {
+    "000": 0.4500832916765859,
+    "111": 0.5499167083234141
+   },
+   "distribution_catalogue": {
+    "000": 0.4500832916765859,
+    "111": 0.5499167083234141
+   },
+   "tv_independent_vs_catalogue": 0.0,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.450083292
+    ],
+    [
+     "111",
+     0.549916708
+    ]
+   ]
+  },
+  "C1-F04": {
+   "circuit": "C1",
+   "category": "swapped control/target",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 6,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999999,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999999,
+   "distribution_independent": {
+    "000": 0.4999999999999999,
+    "001": 0.4999999999999999
+   },
+   "distribution_catalogue": {
+    "000": 0.5,
+    "001": 0.5
+   },
+   "tv_independent_vs_catalogue": 1.1102230246251565e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.5
+    ],
+    [
+     "001",
+     0.5
+    ]
+   ]
+  },
+  "C1-F05": {
+   "circuit": "C1",
+   "category": "swapped control/target",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 6,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999999,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999999,
+   "distribution_independent": {
+    "000": 0.4999999999999999,
+    "011": 0.4999999999999999
+   },
+   "distribution_catalogue": {
+    "000": 0.5,
+    "011": 0.5
+   },
+   "tv_independent_vs_catalogue": 1.1102230246251565e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.5
+    ],
+    [
+     "011",
+     0.5
+    ]
+   ]
+  },
+  "C1-F06": {
+   "circuit": "C1",
+   "category": "wrong qubit",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 6,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.4999999999999999,
+    "111": 0.4999999999999999
+   },
+   "distribution_catalogue": {
+    "000": 0.5,
+    "111": 0.5
+   },
+   "tv_independent_vs_catalogue": 1.1102230246251565e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.5
+    ],
+    [
+     "111",
+     0.5
+    ]
+   ]
+  },
+  "C1-F07": {
+   "circuit": "C1",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 5,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999999,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999999,
+   "distribution_independent": {
+    "000": 0.4999999999999999,
+    "011": 0.4999999999999999
+   },
+   "distribution_catalogue": {
+    "000": 0.5,
+    "011": 0.5
+   },
+   "tv_independent_vs_catalogue": 1.1102230246251565e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.5
+    ],
+    [
+     "011",
+     0.5
+    ]
+   ]
+  },
+  "C1-F08": {
+   "circuit": "C1",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 5,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.5,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.5,
+   "distribution_independent": {
+    "000": 1.0
+   },
+   "distribution_catalogue": {
+    "000": 1.0
+   },
+   "tv_independent_vs_catalogue": 0.0,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     1.0
+    ]
+   ]
+  },
+  "C1-F09": {
+   "circuit": "C1",
+   "category": "extra gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 7,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.4999999999999999,
+    "111": 0.4999999999999999
+   },
+   "distribution_catalogue": {
+    "000": 0.5,
+    "111": 0.5
+   },
+   "tv_independent_vs_catalogue": 1.1102230246251565e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.5
+    ],
+    [
+     "111",
+     0.5
+    ]
+   ]
+  },
+  "C1-F10": {
+   "circuit": "C1",
+   "category": "extra gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 7,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999998,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999998,
+   "distribution_independent": {
+    "011": 0.4999999999999999,
+    "100": 0.4999999999999999
+   },
+   "distribution_catalogue": {
+    "011": 0.5,
+    "100": 0.5
+   },
+   "tv_independent_vs_catalogue": 1.1102230246251565e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "011",
+     0.5
+    ],
+    [
+     "100",
+     0.5
+    ]
+   ]
+  },
+  "C1-F11": {
+   "circuit": "C1",
+   "category": "measurement mapping",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 6,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999999,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999999,
+   "distribution_independent": {
+    "000": 0.4999999999999999,
+    "011": 0.4999999999999999
+   },
+   "distribution_catalogue": {
+    "000": 0.5,
+    "011": 0.5
+   },
+   "tv_independent_vs_catalogue": 1.1102230246251565e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": true,
+   "measurement_only_structural": true,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.5
+    ],
+    [
+     "011",
+     0.5
+    ]
+   ]
+  },
+  "C1-F12": {
+   "circuit": "C1",
+   "category": "wrong gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 6,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.4999999999999999,
+    "111": 0.4999999999999999
+   },
+   "distribution_catalogue": {
+    "000": 0.5,
+    "111": 0.5
+   },
+   "tv_independent_vs_catalogue": 1.1102230246251565e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.5
+    ],
+    [
+     "111",
+     0.5
+    ]
+   ]
+  },
+  "C2-F01": {
+   "circuit": "C2",
+   "category": "missing gate / wrong oracle",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 16,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999986,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999986,
+   "distribution_independent": {
+    "1001": 0.9999999999999986
+   },
+   "distribution_catalogue": {
+    "1001": 1.0
+   },
+   "tv_independent_vs_catalogue": 7.216449660063518e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "1001",
+     1.0
+    ]
+   ]
+  },
+  "C2-F02": {
+   "circuit": "C2",
+   "category": "extra gate / wrong oracle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 18,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999986,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999986,
+   "distribution_independent": {
+    "1111": 0.9999999999999986
+   },
+   "distribution_catalogue": {
+    "1111": 1.0
+   },
+   "tv_independent_vs_catalogue": 7.216449660063518e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "1111",
+     1.0
+    ]
+   ]
+  },
+  "C2-F03": {
+   "circuit": "C2",
+   "category": "wrong qubit",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 17,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999986,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999986,
+   "distribution_independent": {
+    "1110": 0.9999999999999986
+   },
+   "distribution_catalogue": {
+    "1110": 1.0
+   },
+   "tv_independent_vs_catalogue": 7.216449660063518e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "1110",
+     1.0
+    ]
+   ]
+  },
+  "C2-F04": {
+   "circuit": "C2",
+   "category": "swapped control/target",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 17,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999986,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999986,
+   "distribution_independent": {
+    "0011": 0.9999999999999986
+   },
+   "distribution_catalogue": {
+    "0011": 1.0
+   },
+   "tv_independent_vs_catalogue": 7.216449660063518e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "0011",
+     1.0
+    ]
+   ]
+  },
+  "C2-F05": {
+   "circuit": "C2",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 16,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999986,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999986,
+   "distribution_independent": {
+    "0000": 0.9999999999999986
+   },
+   "distribution_catalogue": {
+    "0000": 1.0
+   },
+   "tv_independent_vs_catalogue": 7.216449660063518e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "0000",
+     1.0
+    ]
+   ]
+  },
+  "C2-F06": {
+   "circuit": "C2",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 16,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999993,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999993,
+   "distribution_independent": {
+    "1011": 0.49999999999999933,
+    "1111": 0.49999999999999933
+   },
+   "distribution_catalogue": {
+    "1011": 0.5,
+    "1111": 0.5
+   },
+   "tv_independent_vs_catalogue": 6.661338147750939e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "1011",
+     0.5
+    ],
+    [
+     "1111",
+     0.5
+    ]
+   ]
+  },
+  "C2-F07": {
+   "circuit": "C2",
+   "category": "extra gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 18,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999986,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999986,
+   "distribution_independent": {
+    "1010": 0.9999999999999986
+   },
+   "distribution_catalogue": {
+    "1010": 1.0
+   },
+   "tv_independent_vs_catalogue": 7.216449660063518e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "1010",
+     1.0
+    ]
+   ]
+  },
+  "C2-F08": {
+   "circuit": "C2",
+   "category": "wrong gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 17,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999993,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999993,
+   "distribution_independent": {
+    "1001": 0.49999999999999933,
+    "1011": 0.49999999999999933
+   },
+   "distribution_catalogue": {
+    "1001": 0.5,
+    "1011": 0.5
+   },
+   "tv_independent_vs_catalogue": 6.661338147750939e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "1001",
+     0.5
+    ],
+    [
+     "1011",
+     0.5
+    ]
+   ]
+  },
+  "C2-F09": {
+   "circuit": "C2",
+   "category": "wrong gate (rotation for H)",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 17,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999993,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999993,
+   "distribution_independent": {
+    "1010": 0.49999999999999933,
+    "1011": 0.49999999999999933
+   },
+   "distribution_catalogue": {
+    "1010": 0.5,
+    "1011": 0.5
+   },
+   "tv_independent_vs_catalogue": 6.661338147750939e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "1010",
+     0.5
+    ],
+    [
+     "1011",
+     0.5
+    ]
+   ]
+  },
+  "C2-F10": {
+   "circuit": "C2",
+   "category": "measurement mapping",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 17,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999986,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999986,
+   "distribution_independent": {
+    "0111": 0.9999999999999986
+   },
+   "distribution_catalogue": {
+    "0111": 1.0
+   },
+   "tv_independent_vs_catalogue": 7.216449660063518e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": true,
+   "measurement_only_structural": true,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "0111",
+     1.0
+    ]
+   ]
+  },
+  "C2-F11": {
+   "circuit": "C2",
+   "category": "extra gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 18,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "1011": 0.9999999999999986
+   },
+   "distribution_catalogue": {
+    "1011": 1.0
+   },
+   "tv_independent_vs_catalogue": 7.216449660063518e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "1011",
+     1.0
+    ]
+   ]
+  },
+  "C3-F01": {
+   "circuit": "C3",
+   "category": "wrong oracle (constant)",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 11,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999989,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999989,
+   "distribution_independent": {
+    "000": 0.9999999999999989
+   },
+   "distribution_catalogue": {
+    "000": 1.0
+   },
+   "tv_independent_vs_catalogue": 5.551115123125783e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     1.0
+    ]
+   ]
+  },
+  "C3-F02": {
+   "circuit": "C3",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 13,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999989,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999989,
+   "distribution_independent": {
+    "011": 0.9999999999999989
+   },
+   "distribution_catalogue": {
+    "011": 1.0
+   },
+   "tv_independent_vs_catalogue": 5.551115123125783e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "011",
+     1.0
+    ]
+   ]
+  },
+  "C3-F03": {
+   "circuit": "C3",
+   "category": "wrong qubit",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 14,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999989,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999989,
+   "distribution_independent": {
+    "001": 0.9999999999999989
+   },
+   "distribution_catalogue": {
+    "001": 1.0
+   },
+   "tv_independent_vs_catalogue": 5.551115123125783e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "001",
+     1.0
+    ]
+   ]
+  },
+  "C3-F04": {
+   "circuit": "C3",
+   "category": "swapped control/target",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 14,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999989,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999989,
+   "distribution_independent": {
+    "110": 0.9999999999999989
+   },
+   "distribution_catalogue": {
+    "110": 1.0
+   },
+   "tv_independent_vs_catalogue": 5.551115123125783e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "110",
+     1.0
+    ]
+   ]
+  },
+  "C3-F05": {
+   "circuit": "C3",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 13,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999989,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999989,
+   "distribution_independent": {
+    "000": 0.9999999999999989
+   },
+   "distribution_catalogue": {
+    "000": 1.0
+   },
+   "tv_independent_vs_catalogue": 5.551115123125783e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     1.0
+    ]
+   ]
+  },
+  "C3-F06": {
+   "circuit": "C3",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 13,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.49999999999999944,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.49999999999999944,
+   "distribution_independent": {
+    "110": 0.49999999999999956,
+    "111": 0.49999999999999956
+   },
+   "distribution_catalogue": {
+    "110": 0.5,
+    "111": 0.5
+   },
+   "tv_independent_vs_catalogue": 4.440892098500626e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "110",
+     0.5
+    ],
+    [
+     "111",
+     0.5
+    ]
+   ]
+  },
+  "C3-F07": {
+   "circuit": "C3",
+   "category": "extra gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 15,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999989,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999989,
+   "distribution_independent": {
+    "101": 0.9999999999999989
+   },
+   "distribution_catalogue": {
+    "101": 1.0
+   },
+   "tv_independent_vs_catalogue": 5.551115123125783e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "101",
+     1.0
+    ]
+   ]
+  },
+  "C3-F08": {
+   "circuit": "C3",
+   "category": "wrong gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 14,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.49999999999999944,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.49999999999999944,
+   "distribution_independent": {
+    "011": 0.49999999999999956,
+    "111": 0.49999999999999956
+   },
+   "distribution_catalogue": {
+    "011": 0.5,
+    "111": 0.5
+   },
+   "tv_independent_vs_catalogue": 4.440892098500626e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "011",
+     0.5
+    ],
+    [
+     "111",
+     0.5
+    ]
+   ]
+  },
+  "C3-F09": {
+   "circuit": "C3",
+   "category": "wrong angle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 14,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.0669872981077806,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.0669872981077806,
+   "distribution_independent": {
+    "110": 0.06698729810778062,
+    "111": 0.9330127018922183
+   },
+   "distribution_catalogue": {
+    "110": 0.0669872981077807,
+    "111": 0.9330127018922193
+   },
+   "tv_independent_vs_catalogue": 5.412337245047638e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "110",
+     0.066987298
+    ],
+    [
+     "111",
+     0.933012702
+    ]
+   ]
+  },
+  "C3-F10": {
+   "circuit": "C3",
+   "category": "measurement mapping",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 14,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.9999999999999989,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.9999999999999989,
+   "distribution_independent": {
+    "011": 0.9999999999999989
+   },
+   "distribution_catalogue": {
+    "011": 1.0
+   },
+   "tv_independent_vs_catalogue": 5.551115123125783e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": true,
+   "measurement_only_structural": true,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "011",
+     1.0
+    ]
+   ]
+  },
+  "C3-F11": {
+   "circuit": "C3",
+   "category": "extra gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 15,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "111": 0.9999999999999989
+   },
+   "distribution_catalogue": {
+    "111": 1.0
+   },
+   "tv_independent_vs_catalogue": 5.551115123125783e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "111",
+     1.0
+    ]
+   ]
+  },
+  "C4-F01": {
+   "circuit": "C4",
+   "category": "wrong parameter (iterations)",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 26,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.16406249999999867,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.16406249999999867,
+   "distribution_independent": {
+    "000": 0.031249999999999927,
+    "001": 0.031249999999999927,
+    "010": 0.031249999999999927,
+    "011": 0.031249999999999944,
+    "100": 0.031249999999999927,
+    "101": 0.7812499999999983,
+    "110": 0.031249999999999927,
+    "111": 0.031249999999999927
+   },
+   "distribution_catalogue": {
+    "000": 0.03125,
+    "001": 0.03125,
+    "010": 0.03125,
+    "011": 0.03125,
+    "100": 0.03125,
+    "101": 0.78125,
+    "110": 0.03125,
+    "111": 0.03125
+   },
+   "tv_independent_vs_catalogue": 1.078998002057574e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.03125
+    ],
+    [
+     "001",
+     0.03125
+    ],
+    [
+     "010",
+     0.03125
+    ],
+    [
+     "011",
+     0.03125
+    ],
+    [
+     "100",
+     0.03125
+    ],
+    [
+     "101",
+     0.78125
+    ],
+    [
+     "110",
+     0.03125
+    ],
+    [
+     "111",
+     0.03125
+    ]
+   ]
+  },
+  "C4-F02": {
+   "circuit": "C4",
+   "category": "wrong parameter (iterations)",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 66,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.6152343749999971,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.6152343749999969,
+   "distribution_independent": {
+    "000": 0.09570312499999944,
+    "001": 0.09570312499999938,
+    "010": 0.09570312499999944,
+    "011": 0.09570312499999938,
+    "100": 0.09570312499999944,
+    "101": 0.33007812499999817,
+    "110": 0.09570312499999944,
+    "111": 0.09570312499999944
+   },
+   "distribution_catalogue": {
+    "000": 0.095703125,
+    "001": 0.095703125,
+    "010": 0.095703125,
+    "011": 0.095703125,
+    "100": 0.095703125,
+    "101": 0.330078125,
+    "110": 0.095703125,
+    "111": 0.095703125
+   },
+   "tv_independent_vs_catalogue": 2.9282132274488504e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.095703125
+    ],
+    [
+     "001",
+     0.095703125
+    ],
+    [
+     "010",
+     0.095703125
+    ],
+    [
+     "011",
+     0.095703125
+    ],
+    [
+     "100",
+     0.095703125
+    ],
+    [
+     "101",
+     0.330078125
+    ],
+    [
+     "110",
+     0.095703125
+    ],
+    [
+     "111",
+     0.095703125
+    ]
+   ]
+  },
+  "C4-F03": {
+   "circuit": "C4",
+   "category": "wrong qubit / wrong oracle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 46,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.937499999999996,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.937499999999996,
+   "distribution_independent": {
+    "000": 0.007812499999999971,
+    "001": 0.007812499999999967,
+    "010": 0.007812499999999962,
+    "011": 0.007812499999999977,
+    "100": 0.007812499999999971,
+    "101": 0.007812499999999967,
+    "110": 0.945312499999996,
+    "111": 0.007812499999999952
+   },
+   "distribution_catalogue": {
+    "000": 0.0078125,
+    "001": 0.0078125,
+    "010": 0.0078125,
+    "011": 0.0078125,
+    "100": 0.0078125,
+    "101": 0.0078125,
+    "110": 0.9453125,
+    "111": 0.0078125
+   },
+   "tv_independent_vs_catalogue": 2.114627917215728e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0078125
+    ],
+    [
+     "001",
+     0.0078125
+    ],
+    [
+     "010",
+     0.0078125
+    ],
+    [
+     "011",
+     0.0078125
+    ],
+    [
+     "100",
+     0.0078125
+    ],
+    [
+     "101",
+     0.0078125
+    ],
+    [
+     "110",
+     0.9453125
+    ],
+    [
+     "111",
+     0.0078125
+    ]
+   ]
+  },
+  "C4-F04": {
+   "circuit": "C4",
+   "category": "missing block",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 31,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.1640624999999989,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.16406249999999886,
+   "distribution_independent": {
+    "000": 0.031249999999999917,
+    "001": 0.031249999999999927,
+    "010": 0.031249999999999917,
+    "011": 0.031249999999999934,
+    "100": 0.031249999999999917,
+    "101": 0.7812499999999979,
+    "110": 0.031249999999999917,
+    "111": 0.031249999999999917
+   },
+   "distribution_catalogue": {
+    "000": 0.03125,
+    "001": 0.03125,
+    "010": 0.03125,
+    "011": 0.03125,
+    "100": 0.03125,
+    "101": 0.78125,
+    "110": 0.03125,
+    "111": 0.03125
+   },
+   "tv_independent_vs_catalogue": 1.3322676295501878e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.03125
+    ],
+    [
+     "001",
+     0.03125
+    ],
+    [
+     "010",
+     0.03125
+    ],
+    [
+     "011",
+     0.03125
+    ],
+    [
+     "100",
+     0.03125
+    ],
+    [
+     "101",
+     0.78125
+    ],
+    [
+     "110",
+     0.03125
+    ],
+    [
+     "111",
+     0.03125
+    ]
+   ]
+  },
+  "C4-F05": {
+   "circuit": "C4",
+   "category": "wrong oracle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 42,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.937499999999996,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.937499999999996,
+   "distribution_independent": {
+    "000": 0.007812499999999967,
+    "001": 0.007812499999999979,
+    "010": 0.007812499999999962,
+    "011": 0.007812499999999974,
+    "100": 0.007812499999999962,
+    "101": 0.0078124999999999644,
+    "110": 0.007812499999999957,
+    "111": 0.945312499999996
+   },
+   "distribution_catalogue": {
+    "000": 0.0078125,
+    "001": 0.0078125,
+    "010": 0.0078125,
+    "011": 0.0078125,
+    "100": 0.0078125,
+    "101": 0.0078125,
+    "110": 0.0078125,
+    "111": 0.9453125
+   },
+   "tv_independent_vs_catalogue": 2.1159289598227105e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0078125
+    ],
+    [
+     "001",
+     0.0078125
+    ],
+    [
+     "010",
+     0.0078125
+    ],
+    [
+     "011",
+     0.0078125
+    ],
+    [
+     "100",
+     0.0078125
+    ],
+    [
+     "101",
+     0.0078125
+    ],
+    [
+     "110",
+     0.0078125
+    ],
+    [
+     "111",
+     0.9453125
+    ]
+   ]
+  },
+  "C4-F06": {
+   "circuit": "C4",
+   "category": "measurement mapping",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 46,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.937499999999996,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.937499999999996,
+   "distribution_independent": {
+    "000": 0.007812499999999962,
+    "001": 0.007812499999999974,
+    "010": 0.007812499999999957,
+    "011": 0.945312499999996,
+    "100": 0.007812499999999967,
+    "101": 0.007812499999999979,
+    "110": 0.007812499999999962,
+    "111": 0.0078124999999999644
+   },
+   "distribution_catalogue": {
+    "000": 0.0078125,
+    "001": 0.0078125,
+    "010": 0.0078125,
+    "011": 0.9453125,
+    "100": 0.0078125,
+    "101": 0.0078125,
+    "110": 0.0078125,
+    "111": 0.0078125
+   },
+   "tv_independent_vs_catalogue": 2.1159289598227105e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": true,
+   "measurement_only_structural": true,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0078125
+    ],
+    [
+     "001",
+     0.0078125
+    ],
+    [
+     "010",
+     0.0078125
+    ],
+    [
+     "011",
+     0.9453125
+    ],
+    [
+     "100",
+     0.0078125
+    ],
+    [
+     "101",
+     0.0078125
+    ],
+    [
+     "110",
+     0.0078125
+    ],
+    [
+     "111",
+     0.0078125
+    ]
+   ]
+  },
+  "C4-F07": {
+   "circuit": "C4",
+   "category": "extra gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 47,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.937499999999996,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.937499999999996,
+   "distribution_independent": {
+    "000": 0.007812499999999974,
+    "001": 0.007812499999999962,
+    "010": 0.007812499999999979,
+    "011": 0.007812499999999967,
+    "100": 0.945312499999996,
+    "101": 0.007812499999999957,
+    "110": 0.0078124999999999644,
+    "111": 0.007812499999999962
+   },
+   "distribution_catalogue": {
+    "000": 0.0078125,
+    "001": 0.0078125,
+    "010": 0.0078125,
+    "011": 0.0078125,
+    "100": 0.9453125,
+    "101": 0.0078125,
+    "110": 0.0078125,
+    "111": 0.0078125
+   },
+   "tv_independent_vs_catalogue": 2.1159289598227105e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0078125
+    ],
+    [
+     "001",
+     0.0078125
+    ],
+    [
+     "010",
+     0.0078125
+    ],
+    [
+     "011",
+     0.0078125
+    ],
+    [
+     "100",
+     0.9453125
+    ],
+    [
+     "101",
+     0.0078125
+    ],
+    [
+     "110",
+     0.0078125
+    ],
+    [
+     "111",
+     0.0078125
+    ]
+   ]
+  },
+  "C4-F08": {
+   "circuit": "C4",
+   "category": "extra gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 47,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.007812499999999962,
+    "001": 0.007812499999999974,
+    "010": 0.007812499999999967,
+    "011": 0.007812499999999979,
+    "100": 0.007812499999999957,
+    "101": 0.945312499999996,
+    "110": 0.007812499999999962,
+    "111": 0.0078124999999999644
+   },
+   "distribution_catalogue": {
+    "000": 0.0078125,
+    "001": 0.0078125,
+    "010": 0.0078125,
+    "011": 0.0078125,
+    "100": 0.0078125,
+    "101": 0.9453125,
+    "110": 0.0078125,
+    "111": 0.0078125
+   },
+   "tv_independent_vs_catalogue": 2.1159289598227105e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0078125
+    ],
+    [
+     "001",
+     0.0078125
+    ],
+    [
+     "010",
+     0.0078125
+    ],
+    [
+     "011",
+     0.0078125
+    ],
+    [
+     "100",
+     0.0078125
+    ],
+    [
+     "101",
+     0.9453125
+    ],
+    [
+     "110",
+     0.0078125
+    ],
+    [
+     "111",
+     0.0078125
+    ]
+   ]
+  },
+  "C4-F09": {
+   "circuit": "C4",
+   "category": "wrong angle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 50,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.7792968749999971,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.7792968749999969,
+   "distribution_independent": {
+    "000": 0.11914062499999963,
+    "001": 0.11914062499999963,
+    "010": 0.11914062499999963,
+    "011": 0.11914062499999963,
+    "100": 0.11914062499999963,
+    "101": 0.16601562499999944,
+    "110": 0.11914062499999963,
+    "111": 0.11914062499999963
+   },
+   "distribution_catalogue": {
+    "000": 0.119140625,
+    "001": 0.119140625,
+    "010": 0.119140625,
+    "011": 0.119140625,
+    "100": 0.119140625,
+    "101": 0.166015625,
+    "110": 0.119140625,
+    "111": 0.119140625
+   },
+   "tv_independent_vs_catalogue": 1.5890067039947553e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.119140625
+    ],
+    [
+     "001",
+     0.119140625
+    ],
+    [
+     "010",
+     0.119140625
+    ],
+    [
+     "011",
+     0.119140625
+    ],
+    [
+     "100",
+     0.119140625
+    ],
+    [
+     "101",
+     0.166015625
+    ],
+    [
+     "110",
+     0.119140625
+    ],
+    [
+     "111",
+     0.119140625
+    ]
+   ]
+  },
+  "C4-F10": {
+   "circuit": "C4",
+   "category": "swapped control/target",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 46,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.8203124999999967,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.8203124999999967,
+   "distribution_independent": {
+    "000": 0.12499999999999954,
+    "001": 0.12499999999999954,
+    "010": 0.12499999999999954,
+    "011": 0.12499999999999954,
+    "100": 0.12499999999999954,
+    "101": 0.12499999999999954,
+    "110": 0.12499999999999954,
+    "111": 0.12499999999999954
+   },
+   "distribution_catalogue": {
+    "000": 0.125,
+    "001": 0.125,
+    "010": 0.125,
+    "011": 0.125,
+    "100": 0.125,
+    "101": 0.125,
+    "110": 0.125,
+    "111": 0.125
+   },
+   "tv_independent_vs_catalogue": 1.8318679906315083e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.125
+    ],
+    [
+     "001",
+     0.125
+    ],
+    [
+     "010",
+     0.125
+    ],
+    [
+     "011",
+     0.125
+    ],
+    [
+     "100",
+     0.125
+    ],
+    [
+     "101",
+     0.125
+    ],
+    [
+     "110",
+     0.125
+    ],
+    [
+     "111",
+     0.125
+    ]
+   ]
+  },
+  "C4-F11": {
+   "circuit": "C4",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 45,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.5624999999999977,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.5624999999999977,
+   "distribution_independent": {
+    "000": 0.0703124999999997,
+    "001": 0.07031249999999967,
+    "010": 0.07031249999999972,
+    "011": 0.0703124999999997,
+    "100": 0.07031249999999975,
+    "101": 0.38281249999999833,
+    "110": 0.07031249999999972,
+    "111": 0.19531249999999914
+   },
+   "distribution_catalogue": {
+    "000": 0.0703125,
+    "001": 0.0703125,
+    "010": 0.0703125,
+    "011": 0.0703125,
+    "100": 0.0703125,
+    "101": 0.3828125,
+    "110": 0.0703125,
+    "111": 0.1953125
+   },
+   "tv_independent_vs_catalogue": 2.1371793224034263e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0703125
+    ],
+    [
+     "001",
+     0.0703125
+    ],
+    [
+     "010",
+     0.0703125
+    ],
+    [
+     "011",
+     0.0703125
+    ],
+    [
+     "100",
+     0.0703125
+    ],
+    [
+     "101",
+     0.3828125
+    ],
+    [
+     "110",
+     0.0703125
+    ],
+    [
+     "111",
+     0.1953125
+    ]
+   ]
+  },
+  "C4-F12": {
+   "circuit": "C4",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 45,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.007812499999999962,
+    "001": 0.007812499999999974,
+    "010": 0.007812499999999967,
+    "011": 0.007812499999999979,
+    "100": 0.007812499999999957,
+    "101": 0.945312499999996,
+    "110": 0.007812499999999962,
+    "111": 0.0078124999999999644
+   },
+   "distribution_catalogue": {
+    "000": 0.0078125,
+    "001": 0.0078125,
+    "010": 0.0078125,
+    "011": 0.0078125,
+    "100": 0.0078125,
+    "101": 0.9453125,
+    "110": 0.0078125,
+    "111": 0.0078125
+   },
+   "tv_independent_vs_catalogue": 2.1159289598227105e-15,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0078125
+    ],
+    [
+     "001",
+     0.0078125
+    ],
+    [
+     "010",
+     0.0078125
+    ],
+    [
+     "011",
+     0.0078125
+    ],
+    [
+     "100",
+     0.0078125
+    ],
+    [
+     "101",
+     0.9453125
+    ],
+    [
+     "110",
+     0.0078125
+    ],
+    [
+     "111",
+     0.0078125
+    ]
+   ]
+  },
+  "C5-F01": {
+   "circuit": "C5",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 11,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999999,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999999,
+   "distribution_independent": {
+    "100": 0.2499999999999999,
+    "101": 0.2499999999999999,
+    "110": 0.2499999999999999,
+    "111": 0.2499999999999999
+   },
+   "distribution_catalogue": {
+    "100": 0.25,
+    "101": 0.25,
+    "110": 0.25,
+    "111": 0.25
+   },
+   "tv_independent_vs_catalogue": 2.220446049250313e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "100",
+     0.25
+    ],
+    [
+     "101",
+     0.25
+    ],
+    [
+     "110",
+     0.25
+    ],
+    [
+     "111",
+     0.25
+    ]
+   ]
+  },
+  "C5-F02": {
+   "circuit": "C5",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 11,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999999,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999999,
+   "distribution_independent": {
+    "000": 0.2499999999999999,
+    "001": 0.2499999999999999,
+    "100": 0.2499999999999999,
+    "101": 0.2499999999999999
+   },
+   "distribution_catalogue": {
+    "000": 0.25,
+    "001": 0.25,
+    "100": 0.25,
+    "101": 0.25
+   },
+   "tv_independent_vs_catalogue": 2.220446049250313e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.25
+    ],
+    [
+     "001",
+     0.25
+    ],
+    [
+     "100",
+     0.25
+    ],
+    [
+     "101",
+     0.25
+    ]
+   ]
+  },
+  "C5-F03": {
+   "circuit": "C5",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 11,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999999,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999999,
+   "distribution_independent": {
+    "001": 0.2499999999999999,
+    "011": 0.2499999999999999,
+    "101": 0.2499999999999999,
+    "111": 0.2499999999999999
+   },
+   "distribution_catalogue": {
+    "001": 0.25,
+    "011": 0.25,
+    "101": 0.25,
+    "111": 0.25
+   },
+   "tv_independent_vs_catalogue": 2.220446049250313e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "001",
+     0.25
+    ],
+    [
+     "011",
+     0.25
+    ],
+    [
+     "101",
+     0.25
+    ],
+    [
+     "111",
+     0.25
+    ]
+   ]
+  },
+  "C5-F04": {
+   "circuit": "C5",
+   "category": "wrong gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 12,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999999,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999999,
+   "distribution_independent": {
+    "010": 0.2499999999999999,
+    "011": 0.2499999999999999,
+    "110": 0.2499999999999999,
+    "111": 0.2499999999999999
+   },
+   "distribution_catalogue": {
+    "010": 0.25,
+    "011": 0.25,
+    "110": 0.25,
+    "111": 0.25
+   },
+   "tv_independent_vs_catalogue": 2.220446049250313e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "010",
+     0.25
+    ],
+    [
+     "011",
+     0.25
+    ],
+    [
+     "110",
+     0.25
+    ],
+    [
+     "111",
+     0.25
+    ]
+   ]
+  },
+  "C5-F05": {
+   "circuit": "C5",
+   "category": "wrong angle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 12,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.24999999999999994,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.24999999999999994,
+   "distribution_independent": {
+    "000": 0.18749999999999992,
+    "001": 0.18749999999999992,
+    "010": 0.06249999999999996,
+    "011": 0.06249999999999996,
+    "100": 0.18749999999999992,
+    "101": 0.18749999999999992,
+    "110": 0.06249999999999996,
+    "111": 0.06249999999999996
+   },
+   "distribution_catalogue": {
+    "000": 0.1875,
+    "001": 0.1875,
+    "010": 0.0625,
+    "011": 0.0625,
+    "100": 0.1875,
+    "101": 0.1875,
+    "110": 0.0625,
+    "111": 0.0625
+   },
+   "tv_independent_vs_catalogue": 2.498001805406602e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.1875
+    ],
+    [
+     "001",
+     0.1875
+    ],
+    [
+     "010",
+     0.0625
+    ],
+    [
+     "011",
+     0.0625
+    ],
+    [
+     "100",
+     0.1875
+    ],
+    [
+     "101",
+     0.1875
+    ],
+    [
+     "110",
+     0.0625
+    ],
+    [
+     "111",
+     0.0625
+    ]
+   ]
+  },
+  "C5-F06": {
+   "circuit": "C5",
+   "category": "wrong qubit",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 12,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.7499999999999997,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.7499999999999998,
+   "distribution_independent": {
+    "100": 0.4999999999999998,
+    "101": 0.4999999999999998
+   },
+   "distribution_catalogue": {
+    "100": 0.5,
+    "101": 0.5
+   },
+   "tv_independent_vs_catalogue": 2.220446049250313e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "100",
+     0.5
+    ],
+    [
+     "101",
+     0.5
+    ]
+   ]
+  },
+  "C5-F07": {
+   "circuit": "C5",
+   "category": "extra gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 13,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.35355339059327345,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.35355339059327345,
+   "distribution_independent": {
+    "000": 0.03661165235168153,
+    "001": 0.21338834764831832,
+    "010": 0.03661165235168153,
+    "011": 0.21338834764831824,
+    "100": 0.03661165235168153,
+    "101": 0.21338834764831832,
+    "110": 0.03661165235168153,
+    "111": 0.21338834764831824
+   },
+   "distribution_catalogue": {
+    "000": 0.03661165235168155,
+    "001": 0.21338834764831843,
+    "010": 0.03661165235168155,
+    "011": 0.21338834764831843,
+    "100": 0.03661165235168155,
+    "101": 0.21338834764831843,
+    "110": 0.03661165235168155,
+    "111": 0.21338834764831843
+   },
+   "tv_independent_vs_catalogue": 3.469446951953614e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.036611652
+    ],
+    [
+     "001",
+     0.213388348
+    ],
+    [
+     "010",
+     0.036611652
+    ],
+    [
+     "011",
+     0.213388348
+    ],
+    [
+     "100",
+     0.036611652
+    ],
+    [
+     "101",
+     0.213388348
+    ],
+    [
+     "110",
+     0.036611652
+    ],
+    [
+     "111",
+     0.213388348
+    ]
+   ]
+  },
+  "C5-F08": {
+   "circuit": "C5",
+   "category": "measurement mapping",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 12,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999999,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999999,
+   "distribution_independent": {
+    "000": 0.2499999999999999,
+    "001": 0.2499999999999999,
+    "010": 0.2499999999999999,
+    "011": 0.2499999999999999
+   },
+   "distribution_catalogue": {
+    "000": 0.25,
+    "001": 0.25,
+    "010": 0.25,
+    "011": 0.25
+   },
+   "tv_independent_vs_catalogue": 2.220446049250313e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": true,
+   "measurement_only_structural": true,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.25
+    ],
+    [
+     "001",
+     0.25
+    ],
+    [
+     "010",
+     0.25
+    ],
+    [
+     "011",
+     0.25
+    ]
+   ]
+  },
+  "C5-F09": {
+   "circuit": "C5",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 11,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.12499999999999994,
+    "001": 0.12499999999999994,
+    "010": 0.12499999999999994,
+    "011": 0.12499999999999994,
+    "100": 0.12499999999999994,
+    "101": 0.12499999999999994,
+    "110": 0.12499999999999994,
+    "111": 0.12499999999999994
+   },
+   "distribution_catalogue": {
+    "000": 0.125,
+    "001": 0.125,
+    "010": 0.125,
+    "011": 0.125,
+    "100": 0.125,
+    "101": 0.125,
+    "110": 0.125,
+    "111": 0.125
+   },
+   "tv_independent_vs_catalogue": 2.220446049250313e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.125
+    ],
+    [
+     "001",
+     0.125
+    ],
+    [
+     "010",
+     0.125
+    ],
+    [
+     "011",
+     0.125
+    ],
+    [
+     "100",
+     0.125
+    ],
+    [
+     "101",
+     0.125
+    ],
+    [
+     "110",
+     0.125
+    ],
+    [
+     "111",
+     0.125
+    ]
+   ]
+  },
+  "C5-F10": {
+   "circuit": "C5",
+   "category": "wrong qubit",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 12,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.12499999999999994,
+    "001": 0.12499999999999994,
+    "010": 0.12499999999999994,
+    "011": 0.12499999999999994,
+    "100": 0.12499999999999994,
+    "101": 0.12499999999999994,
+    "110": 0.12499999999999994,
+    "111": 0.12499999999999994
+   },
+   "distribution_catalogue": {
+    "000": 0.125,
+    "001": 0.125,
+    "010": 0.125,
+    "011": 0.125,
+    "100": 0.125,
+    "101": 0.125,
+    "110": 0.125,
+    "111": 0.125
+   },
+   "tv_independent_vs_catalogue": 2.220446049250313e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.125
+    ],
+    [
+     "001",
+     0.125
+    ],
+    [
+     "010",
+     0.125
+    ],
+    [
+     "011",
+     0.125
+    ],
+    [
+     "100",
+     0.125
+    ],
+    [
+     "101",
+     0.125
+    ],
+    [
+     "110",
+     0.125
+    ],
+    [
+     "111",
+     0.125
+    ]
+   ]
+  },
+  "C5-F11": {
+   "circuit": "C5",
+   "category": "wrong angle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 12,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.12499999999999994,
+    "001": 0.12499999999999994,
+    "010": 0.12499999999999994,
+    "011": 0.12499999999999994,
+    "100": 0.12499999999999994,
+    "101": 0.12499999999999994,
+    "110": 0.12499999999999994,
+    "111": 0.12499999999999994
+   },
+   "distribution_catalogue": {
+    "000": 0.125,
+    "001": 0.125,
+    "010": 0.125,
+    "011": 0.125,
+    "100": 0.125,
+    "101": 0.125,
+    "110": 0.125,
+    "111": 0.125
+   },
+   "tv_independent_vs_catalogue": 2.220446049250313e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.125
+    ],
+    [
+     "001",
+     0.125
+    ],
+    [
+     "010",
+     0.125
+    ],
+    [
+     "011",
+     0.125
+    ],
+    [
+     "100",
+     0.125
+    ],
+    [
+     "101",
+     0.125
+    ],
+    [
+     "110",
+     0.125
+    ],
+    [
+     "111",
+     0.125
+    ]
+   ]
+  },
+  "C5-F12": {
+   "circuit": "C5",
+   "category": "wrong gate (state preparation)",
+   "tag": "other",
+   "former_reserve": true,
+   "instructions": 12,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.26134628439700336,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.26134628439700336,
+   "distribution_independent": {
+    "000": 0.23325317547305469,
+    "001": 0.20154655446197417,
+    "010": 0.1249999999999999,
+    "011": 0.04845344553802566,
+    "100": 0.016746824526945165,
+    "101": 0.04845344553802566,
+    "110": 0.1249999999999999,
+    "111": 0.20154655446197417
+   },
+   "distribution_catalogue": {
+    "000": 0.23325317547305482,
+    "001": 0.20154655446197434,
+    "010": 0.125,
+    "011": 0.04845344553802569,
+    "100": 0.016746824526945175,
+    "101": 0.04845344553802568,
+    "110": 0.12499999999999999,
+    "111": 0.20154655446197428
+   },
+   "tv_independent_vs_catalogue": 3.2439329000766293e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.233253175
+    ],
+    [
+     "001",
+     0.201546554
+    ],
+    [
+     "010",
+     0.125
+    ],
+    [
+     "011",
+     0.048453446
+    ],
+    [
+     "100",
+     0.016746825
+    ],
+    [
+     "101",
+     0.048453446
+    ],
+    [
+     "110",
+     0.125
+    ],
+    [
+     "111",
+     0.201546554
+    ]
+   ]
+  },
+  "C6-F01": {
+   "circuit": "C6",
+   "category": "wrong order",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 10,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.0625,
+    "011": 0.0625,
+    "100": 0.18749999999999992,
+    "101": 0.18749999999999992,
+    "110": 0.18749999999999992,
+    "111": 0.18749999999999992
+   },
+   "distribution_catalogue": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.0625,
+    "011": 0.0625,
+    "100": 0.1875,
+    "101": 0.1875,
+    "110": 0.1875,
+    "111": 0.1875
+   },
+   "tv_independent_vs_catalogue": 1.6653345369377348e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0625
+    ],
+    [
+     "001",
+     0.0625
+    ],
+    [
+     "010",
+     0.0625
+    ],
+    [
+     "011",
+     0.0625
+    ],
+    [
+     "100",
+     0.1875
+    ],
+    [
+     "101",
+     0.1875
+    ],
+    [
+     "110",
+     0.1875
+    ],
+    [
+     "111",
+     0.1875
+    ]
+   ]
+  },
+  "C6-F02": {
+   "circuit": "C6",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 9,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.24999999999999983,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.24999999999999983,
+   "distribution_independent": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.18749999999999992,
+    "011": 0.18749999999999992,
+    "100": 0.18749999999999992,
+    "101": 0.18749999999999992,
+    "110": 0.0625,
+    "111": 0.0625
+   },
+   "distribution_catalogue": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.1875,
+    "011": 0.1875,
+    "100": 0.1875,
+    "101": 0.1875,
+    "110": 0.0625,
+    "111": 0.0625
+   },
+   "tv_independent_vs_catalogue": 1.6653345369377348e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0625
+    ],
+    [
+     "001",
+     0.0625
+    ],
+    [
+     "010",
+     0.1875
+    ],
+    [
+     "011",
+     0.1875
+    ],
+    [
+     "100",
+     0.1875
+    ],
+    [
+     "101",
+     0.1875
+    ],
+    [
+     "110",
+     0.0625
+    ],
+    [
+     "111",
+     0.0625
+    ]
+   ]
+  },
+  "C6-F03": {
+   "circuit": "C6",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 9,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.0625,
+    "011": 0.0625,
+    "100": 0.18749999999999992,
+    "101": 0.18749999999999992,
+    "110": 0.18749999999999992,
+    "111": 0.18749999999999992
+   },
+   "distribution_catalogue": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.0625,
+    "011": 0.0625,
+    "100": 0.1875,
+    "101": 0.1875,
+    "110": 0.1875,
+    "111": 0.1875
+   },
+   "tv_independent_vs_catalogue": 1.6653345369377348e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0625
+    ],
+    [
+     "001",
+     0.0625
+    ],
+    [
+     "010",
+     0.0625
+    ],
+    [
+     "011",
+     0.0625
+    ],
+    [
+     "100",
+     0.1875
+    ],
+    [
+     "101",
+     0.1875
+    ],
+    [
+     "110",
+     0.1875
+    ],
+    [
+     "111",
+     0.1875
+    ]
+   ]
+  },
+  "C6-F04": {
+   "circuit": "C6",
+   "category": "wrong angle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 10,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.49999999999999983,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999997,
+   "distribution_independent": {
+    "000": 0.18749999999999992,
+    "001": 0.18749999999999992,
+    "010": 0.18749999999999992,
+    "011": 0.18749999999999992,
+    "100": 0.06249999999999996,
+    "101": 0.06249999999999996,
+    "110": 0.06249999999999996,
+    "111": 0.06249999999999996
+   },
+   "distribution_catalogue": {
+    "000": 0.1875,
+    "001": 0.1875,
+    "010": 0.1875,
+    "011": 0.1875,
+    "100": 0.0625,
+    "101": 0.0625,
+    "110": 0.0625,
+    "111": 0.0625
+   },
+   "tv_independent_vs_catalogue": 2.498001805406602e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.1875
+    ],
+    [
+     "001",
+     0.1875
+    ],
+    [
+     "010",
+     0.1875
+    ],
+    [
+     "011",
+     0.1875
+    ],
+    [
+     "100",
+     0.0625
+    ],
+    [
+     "101",
+     0.0625
+    ],
+    [
+     "110",
+     0.0625
+    ],
+    [
+     "111",
+     0.0625
+    ]
+   ]
+  },
+  "C6-F05": {
+   "circuit": "C6",
+   "category": "wrong angle",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 10,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.0419801788008812,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.0419801788008812,
+   "distribution_independent": {
+    "000": 0.05200495529977971,
+    "001": 0.05200495529977971,
+    "010": 0.05200495529977971,
+    "011": 0.05200495529977971,
+    "100": 0.19799504470022022,
+    "101": 0.19799504470022022,
+    "110": 0.19799504470022022,
+    "111": 0.19799504470022022
+   },
+   "distribution_catalogue": {
+    "000": 0.05200495529977972,
+    "001": 0.05200495529977972,
+    "010": 0.05200495529977972,
+    "011": 0.05200495529977972,
+    "100": 0.19799504470022028,
+    "101": 0.19799504470022028,
+    "110": 0.19799504470022028,
+    "111": 0.19799504470022028
+   },
+   "tv_independent_vs_catalogue": 1.3877787807814457e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.052004955
+    ],
+    [
+     "001",
+     0.052004955
+    ],
+    [
+     "010",
+     0.052004955
+    ],
+    [
+     "011",
+     0.052004955
+    ],
+    [
+     "100",
+     0.197995045
+    ],
+    [
+     "101",
+     0.197995045
+    ],
+    [
+     "110",
+     0.197995045
+    ],
+    [
+     "111",
+     0.197995045
+    ]
+   ]
+  },
+  "C6-F06": {
+   "circuit": "C6",
+   "category": "swapped control/target",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 10,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.6830127018922193,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.6830127018922191,
+   "distribution_independent": {
+    "000": 0.46650635094610965,
+    "001": 0.03349364905389031,
+    "110": 0.46650635094610965,
+    "111": 0.03349364905389031
+   },
+   "distribution_catalogue": {
+    "000": 0.46650635094610965,
+    "001": 0.03349364905389035,
+    "110": 0.46650635094610965,
+    "111": 0.03349364905389035
+   },
+   "tv_independent_vs_catalogue": 4.163336342344337e-17,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.466506351
+    ],
+    [
+     "001",
+     0.033493649
+    ],
+    [
+     "110",
+     0.466506351
+    ],
+    [
+     "111",
+     0.033493649
+    ]
+   ]
+  },
+  "C6-F07": {
+   "circuit": "C6",
+   "category": "swapped control/target",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 10,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.24999999999999983,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.24999999999999983,
+   "distribution_independent": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.18749999999999992,
+    "011": 0.18749999999999992,
+    "100": 0.0625,
+    "101": 0.0625,
+    "110": 0.18749999999999992,
+    "111": 0.18749999999999992
+   },
+   "distribution_catalogue": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.1875,
+    "011": 0.1875,
+    "100": 0.0625,
+    "101": 0.0625,
+    "110": 0.1875,
+    "111": 0.1875
+   },
+   "tv_independent_vs_catalogue": 1.6653345369377348e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0625
+    ],
+    [
+     "001",
+     0.0625
+    ],
+    [
+     "010",
+     0.1875
+    ],
+    [
+     "011",
+     0.1875
+    ],
+    [
+     "100",
+     0.0625
+    ],
+    [
+     "101",
+     0.0625
+    ],
+    [
+     "110",
+     0.1875
+    ],
+    [
+     "111",
+     0.1875
+    ]
+   ]
+  },
+  "C6-F08": {
+   "circuit": "C6",
+   "category": "wrong qubit",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 10,
+   "barriers": 0,
+   "predicted_class": "EQ",
+   "classifier_ideal_verdict": "equivalent",
+   "classifier_ideal_tv_vs_original": 0.0,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "EQ",
+   "independent_class": "EQ",
+   "independent_tv_vs_original": 0.0,
+   "distribution_independent": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.0625,
+    "011": 0.0625,
+    "100": 0.18749999999999992,
+    "101": 0.18749999999999992,
+    "110": 0.18749999999999992,
+    "111": 0.18749999999999992
+   },
+   "distribution_catalogue": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.0625,
+    "011": 0.0625,
+    "100": 0.1875,
+    "101": 0.1875,
+    "110": 0.1875,
+    "111": 0.1875
+   },
+   "tv_independent_vs_catalogue": 1.6653345369377348e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0625
+    ],
+    [
+     "001",
+     0.0625
+    ],
+    [
+     "010",
+     0.0625
+    ],
+    [
+     "011",
+     0.0625
+    ],
+    [
+     "100",
+     0.1875
+    ],
+    [
+     "101",
+     0.1875
+    ],
+    [
+     "110",
+     0.1875
+    ],
+    [
+     "111",
+     0.1875
+    ]
+   ]
+  },
+  "C6-F09": {
+   "circuit": "C6",
+   "category": "missing gate",
+   "tag": "missing_gate",
+   "former_reserve": false,
+   "instructions": 9,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.49999999999999994,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.49999999999999994,
+   "distribution_independent": {
+    "000": 0.12500000000000003,
+    "010": 0.12500000000000003,
+    "101": 0.37499999999999994,
+    "111": 0.37499999999999994
+   },
+   "distribution_catalogue": {
+    "000": 0.125,
+    "010": 0.125,
+    "101": 0.375,
+    "111": 0.375
+   },
+   "tv_independent_vs_catalogue": 8.326672684688674e-17,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "single_removal_matches_remove_instruction": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.125
+    ],
+    [
+     "010",
+     0.125
+    ],
+    [
+     "101",
+     0.375
+    ],
+    [
+     "111",
+     0.375
+    ]
+   ]
+  },
+  "C6-F10": {
+   "circuit": "C6",
+   "category": "measurement mapping",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 10,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.24999999999999983,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.24999999999999983,
+   "distribution_independent": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.18749999999999992,
+    "011": 0.18749999999999992,
+    "100": 0.0625,
+    "101": 0.0625,
+    "110": 0.18749999999999992,
+    "111": 0.18749999999999992
+   },
+   "distribution_catalogue": {
+    "000": 0.0625,
+    "001": 0.0625,
+    "010": 0.1875,
+    "011": 0.1875,
+    "100": 0.0625,
+    "101": 0.0625,
+    "110": 0.1875,
+    "111": 0.1875
+   },
+   "tv_independent_vs_catalogue": 1.6653345369377348e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": true,
+   "measurement_only_structural": true,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0625
+    ],
+    [
+     "001",
+     0.0625
+    ],
+    [
+     "010",
+     0.1875
+    ],
+    [
+     "011",
+     0.1875
+    ],
+    [
+     "100",
+     0.0625
+    ],
+    [
+     "101",
+     0.0625
+    ],
+    [
+     "110",
+     0.1875
+    ],
+    [
+     "111",
+     0.1875
+    ]
+   ]
+  },
+  "C6-F11": {
+   "circuit": "C6",
+   "category": "extra gate",
+   "tag": "other",
+   "former_reserve": false,
+   "instructions": 11,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.4999999999999996,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.4999999999999996,
+   "distribution_independent": {
+    "000": 0.18749999999999992,
+    "001": 0.18749999999999992,
+    "010": 0.18749999999999992,
+    "011": 0.18749999999999992,
+    "100": 0.0625,
+    "101": 0.0625,
+    "110": 0.0625,
+    "111": 0.0625
+   },
+   "distribution_catalogue": {
+    "000": 0.1875,
+    "001": 0.1875,
+    "010": 0.1875,
+    "011": 0.1875,
+    "100": 0.0625,
+    "101": 0.0625,
+    "110": 0.0625,
+    "111": 0.0625
+   },
+   "tv_independent_vs_catalogue": 1.6653345369377348e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.1875
+    ],
+    [
+     "001",
+     0.1875
+    ],
+    [
+     "010",
+     0.1875
+    ],
+    [
+     "011",
+     0.1875
+    ],
+    [
+     "100",
+     0.0625
+    ],
+    [
+     "101",
+     0.0625
+    ],
+    [
+     "110",
+     0.0625
+    ],
+    [
+     "111",
+     0.0625
+    ]
+   ]
+  },
+  "C6-F12": {
+   "circuit": "C6",
+   "category": "wrong gate",
+   "tag": "other",
+   "former_reserve": true,
+   "instructions": 10,
+   "barriers": 0,
+   "predicted_class": "NE",
+   "classifier_ideal_verdict": "not_equivalent",
+   "classifier_ideal_tv_vs_original": 0.24999999999999983,
+   "classifier_unitary_verdict": "unknown",
+   "classifier_unitary_reason": "measurement",
+   "observed_class": "NE",
+   "independent_class": "NE",
+   "independent_tv_vs_original": 0.24999999999999983,
+   "distribution_independent": {
+    "000": 0.0625,
+    "001": 0.18749999999999992,
+    "010": 0.0625,
+    "011": 0.18749999999999992,
+    "100": 0.18749999999999992,
+    "101": 0.0625,
+    "110": 0.18749999999999992,
+    "111": 0.0625
+   },
+   "distribution_catalogue": {
+    "000": 0.0625,
+    "001": 0.1875,
+    "010": 0.0625,
+    "011": 0.1875,
+    "100": 0.1875,
+    "101": 0.0625,
+    "110": 0.1875,
+    "111": 0.0625
+   },
+   "tv_independent_vs_catalogue": 1.6653345369377348e-16,
+   "tv_independent_vs_classifier": 0.0,
+   "measurement_only_catalogue": false,
+   "measurement_only_structural": false,
+   "unsupported_gates": [],
+   "reproducible": true,
+   "all_checks_pass": true,
+   "signature": [
+    [
+     "000",
+     0.0625
+    ],
+    [
+     "001",
+     0.1875
+    ],
+    [
+     "010",
+     0.0625
+    ],
+    [
+     "011",
+     0.1875
+    ],
+    [
+     "100",
+     0.1875
+    ],
+    [
+     "101",
+     0.0625
+    ],
+    [
+     "110",
+     0.1875
+    ],
+    [
+     "111",
+     0.0625
+    ]
+   ]
+  }
+ },
+ "observed_redundant_groups": [
+  [
+   "C1-F05",
+   "C1-F07",
+   "C1-F11"
+  ],
+  [
+   "C3-F01",
+   "C3-F05"
+  ],
+  [
+   "C3-F02",
+   "C3-F10"
+  ],
+  [
+   "C4-F01",
+   "C4-F04"
+  ],
+  [
+   "C6-F04",
+   "C6-F11"
+  ],
+  [
+   "C6-F07",
+   "C6-F10"
+  ]
+ ],
+ "catalogue_redundant_groups_match": true,
+ "counts_all": {
+  "C1": {
+   "faults": 12,
+   "not_equivalent": 9,
+   "equivalent": 3,
+   "unknown": 0,
+   "distinct_behaviours": 8,
+   "distinct_distributions": 7
+  },
+  "C2": {
+   "faults": 11,
+   "not_equivalent": 10,
+   "equivalent": 1,
+   "unknown": 0,
+   "distinct_behaviours": 10,
+   "distinct_distributions": 10
+  },
+  "C3": {
+   "faults": 11,
+   "not_equivalent": 10,
+   "equivalent": 1,
+   "unknown": 0,
+   "distinct_behaviours": 9,
+   "distinct_distributions": 8
+  },
+  "C4": {
+   "faults": 12,
+   "not_equivalent": 10,
+   "equivalent": 2,
+   "unknown": 0,
+   "distinct_behaviours": 9,
+   "distinct_distributions": 9
+  },
+  "C5": {
+   "faults": 12,
+   "not_equivalent": 9,
+   "equivalent": 3,
+   "unknown": 0,
+   "distinct_behaviours": 9,
+   "distinct_distributions": 9
+  },
+  "C6": {
+   "faults": 12,
+   "not_equivalent": 9,
+   "equivalent": 3,
+   "unknown": 0,
+   "distinct_behaviours": 8,
+   "distinct_distributions": 7
+  },
+  "total": {
+   "faults": 70,
+   "not_equivalent": 57,
+   "equivalent": 13,
+   "unknown": 0,
+   "distinct_behaviours": 53,
+   "distinct_distributions": 50
+  }
+ },
+ "counts_without_missing_gate": {
+  "C1": {
+   "faults": 10,
+   "not_equivalent": 7,
+   "equivalent": 3,
+   "unknown": 0,
+   "distinct_behaviours": 7,
+   "distinct_distributions": 6
+  },
+  "C2": {
+   "faults": 8,
+   "not_equivalent": 7,
+   "equivalent": 1,
+   "unknown": 0,
+   "distinct_behaviours": 7,
+   "distinct_distributions": 7
+  },
+  "C3": {
+   "faults": 8,
+   "not_equivalent": 7,
+   "equivalent": 1,
+   "unknown": 0,
+   "distinct_behaviours": 7,
+   "distinct_distributions": 7
+  },
+  "C4": {
+   "faults": 10,
+   "not_equivalent": 9,
+   "equivalent": 1,
+   "unknown": 0,
+   "distinct_behaviours": 8,
+   "distinct_distributions": 8
+  },
+  "C5": {
+   "faults": 8,
+   "not_equivalent": 6,
+   "equivalent": 2,
+   "unknown": 0,
+   "distinct_behaviours": 6,
+   "distinct_distributions": 6
+  },
+  "C6": {
+   "faults": 9,
+   "not_equivalent": 7,
+   "equivalent": 2,
+   "unknown": 0,
+   "distinct_behaviours": 6,
+   "distinct_distributions": 5
+  },
+  "total": {
+   "faults": 53,
+   "not_equivalent": 43,
+   "equivalent": 10,
+   "unknown": 0,
+   "distinct_behaviours": 41,
+   "distinct_distributions": 39
+  }
+ }
+}

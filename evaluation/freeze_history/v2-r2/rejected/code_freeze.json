@@ -1,0 +1,411 @@
+{
+ "catalogue_version": "phase6a-catalogue-v1",
+ "commands": {
+  "catalogue_check": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -m evaluation.check_catalogue",
+  "freeze_check": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -m evaluation.check_code_freeze",
+  "protocol_check": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -m evaluation.check_protocol",
+  "tests": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -W default -m pytest -p no:cacheprovider -q --no-header tests"
+ },
+ "covers": {
+  "build": [
+   "pyproject.toml"
+  ],
+  "catalogue": [
+   "evaluation/CATALOGUE_FREEZE.md",
+   "evaluation/manifest.json",
+   "evaluation/preflight/catalogue.py"
+  ],
+  "evaluation_code": [
+   "evaluation/analysis.py",
+   "evaluation/check_catalogue.py",
+   "evaluation/check_code_freeze.py",
+   "evaluation/check_protocol.py",
+   "evaluation/circuits.py",
+   "evaluation/faults.py",
+   "evaluation/make_seeds.py",
+   "evaluation/preflight/catalogue.py",
+   "evaluation/preflight/smoke.py",
+   "evaluation/preflight/validate.py",
+   "evaluation/run_study.py",
+   "evaluation/study_config.py",
+   "evaluation/suites.py"
+  ],
+  "existing_tests": [
+   "tests/test_adjusted_metrics.py",
+   "tests/test_equivalence.py",
+   "tests/test_generator.py",
+   "tests/test_metrics.py",
+   "tests/test_mutation.py",
+   "tests/test_mutation_metrics.py",
+   "tests/test_reporting.py",
+   "tests/test_runner.py",
+   "tests/test_sampling.py"
+  ],
+  "harness_tests": [
+   "tests/test_evaluation_harness.py"
+  ],
+  "preflight_evidence": [
+   "evaluation/preflight/PREFLIGHT.md",
+   "evaluation/preflight/results/smoke-qiskit-2.0.3.json",
+   "evaluation/preflight/results/smoke-qiskit-2.6.1.json",
+   "evaluation/preflight/results/validate-qiskit-2.0.3.json",
+   "evaluation/preflight/results/validate-qiskit-2.6.1.json"
+  ],
+  "protocol": [
+   "evaluation/PROTOCOL.md",
+   "evaluation/protocol.lock.json"
+  ],
+  "qmutate_source": [
+   "src/qmutate/__init__.py",
+   "src/qmutate/equivalence.py",
+   "src/qmutate/generator.py",
+   "src/qmutate/metrics.py",
+   "src/qmutate/mutation.py",
+   "src/qmutate/py.typed",
+   "src/qmutate/reporting.py",
+   "src/qmutate/runner.py",
+   "src/qmutate/sampling.py"
+  ]
+ },
+ "environments": {
+  "qiskit-2.0.3": {
+   "all_distributions": {
+    "dill": "0.4.1",
+    "iniconfig": "2.3.1",
+    "mpmath": "1.3.0",
+    "numpy": "2.4.6",
+    "packaging": "26.3",
+    "pluggy": "1.7.0",
+    "pygments": "2.21.0",
+    "pytest": "9.1.1",
+    "python-dateutil": "3.0.0",
+    "qiskit": "2.0.3",
+    "qmutate": "0.1.0",
+    "rustworkx": "0.18.1",
+    "scipy": "1.17.1",
+    "six": "1.17.0",
+    "stevedore": "5.9.1",
+    "symengine": "0.13.0",
+    "sympy": "1.14.0",
+    "typing_extensions": "4.16.0",
+    "tzdata": "2026.5"
+   },
+   "basic_simulator": "0.1",
+   "environment_variables": {
+    "VECLIB_MAXIMUM_THREADS": "1"
+   },
+   "implementation": "CPython",
+   "key_distributions": {
+    "dill": {
+     "record_sha256": "c04614d385eb0c5767122bdd3691176a9598302ec4e575089d8ac2e6ce19a156",
+     "version": "0.4.1"
+    },
+    "numpy": {
+     "record_sha256": "f58f0d823954204f8adaf62e1ba5ac0f50cf452641ec1674a429ea72fac8c095",
+     "version": "2.4.6"
+    },
+    "qiskit": {
+     "record_sha256": "e0a823a6f8a27205691d7de9af1f1adc124d3b2cc56e761d853b6bdad0d78a06",
+     "version": "2.0.3"
+    },
+    "rustworkx": {
+     "record_sha256": "861e54a6a558ce4a3adc3d2782576e825893582f6dbdcca732b156ee4e3eaec8",
+     "version": "0.18.1"
+    },
+    "scipy": {
+     "record_sha256": "8bf88fdb53142b93b2afa898badc21411daf59776a61dcc4b3a0971da9f75d52",
+     "version": "1.17.1"
+    },
+    "stevedore": {
+     "record_sha256": "1739a990104207f9f52b43c8dbfb2fbcb1a84623496b3eb02af9866272a5149a",
+     "version": "5.9.1"
+    },
+    "symengine": {
+     "record_sha256": "fc552de51421b2d280803b3b3eea4ede0267e5d3b53697361941901a8ba80345",
+     "version": "0.13.0"
+    },
+    "sympy": {
+     "record_sha256": "4215a702825f6ab2cb1ecfbdcf6926d6d77e6eb233bc223cdfdace1aca6bfe24",
+     "version": "1.14.0"
+    }
+   },
+   "machine": "arm64",
+   "numpy": "2.4.6",
+   "numpy_blas": {
+    "name": "accelerate",
+    "version": "unknown"
+   },
+   "platform": "macOS-27.0-arm64-arm-64bit",
+   "python": "3.11.14",
+   "qiskit": "2.0.3",
+   "qmutate_imported_from": "src/qmutate",
+   "qmutate_installed_copy": {
+    "editable": false,
+    "installed": true,
+    "version": "0.1.0"
+   }
+  },
+  "qiskit-2.6.1": {
+   "all_distributions": {
+    "dill": "0.4.1",
+    "iniconfig": "2.3.1",
+    "numpy": "2.4.6",
+    "packaging": "26.3",
+    "pluggy": "1.7.0",
+    "pygments": "2.21.0",
+    "pytest": "9.1.1",
+    "qiskit": "2.6.1",
+    "qmutate": "0.1.0",
+    "rustworkx": "0.18.1",
+    "scipy": "1.17.1",
+    "stevedore": "5.9.1",
+    "typing_extensions": "4.16.0"
+   },
+   "basic_simulator": "0.1",
+   "environment_variables": {
+    "VECLIB_MAXIMUM_THREADS": "1"
+   },
+   "implementation": "CPython",
+   "key_distributions": {
+    "dill": {
+     "record_sha256": "37a44bf31054e66c8b3c65cbf6b867ddf54f167ddc0a01a2aec197fdc02f52ba",
+     "version": "0.4.1"
+    },
+    "numpy": {
+     "record_sha256": "bcb99a943b6f5b4d65681692fb887225c3b58f8fc93b219970a730193f5b260f",
+     "version": "2.4.6"
+    },
+    "qiskit": {
+     "record_sha256": "636e0de42511973ae4640081965888a5bf67678d76211666b1455d12e1d41b5d",
+     "version": "2.6.1"
+    },
+    "rustworkx": {
+     "record_sha256": "861e54a6a558ce4a3adc3d2782576e825893582f6dbdcca732b156ee4e3eaec8",
+     "version": "0.18.1"
+    },
+    "scipy": {
+     "record_sha256": "8bf88fdb53142b93b2afa898badc21411daf59776a61dcc4b3a0971da9f75d52",
+     "version": "1.17.1"
+    },
+    "stevedore": {
+     "record_sha256": "1739a990104207f9f52b43c8dbfb2fbcb1a84623496b3eb02af9866272a5149a",
+     "version": "5.9.1"
+    }
+   },
+   "machine": "arm64",
+   "numpy": "2.4.6",
+   "numpy_blas": {
+    "name": "accelerate",
+    "version": "unknown"
+   },
+   "platform": "macOS-27.0-arm64-arm-64bit",
+   "python": "3.11.14",
+   "qiskit": "2.6.1",
+   "qmutate_imported_from": "src/qmutate",
+   "qmutate_installed_copy": {
+    "editable": true,
+    "installed": true,
+    "version": "0.1.0"
+   }
+  }
+ },
+ "files_sha256": {
+  "evaluation/CATALOGUE_FREEZE.md": "41a925df5dd23ecafb03b40b2c1c8a63f26d42826ec22bf783d3390346f92613",
+  "evaluation/PROTOCOL.md": "6a6d0d941ee1b2b79306b77b94ae6157323140ddca0ee285ec519a0b6901ba3d",
+  "evaluation/analysis.py": "53d9ae6349b6a19c6dece06ace55ce3cd133aaeee34b8ace27aa498f1172c154",
+  "evaluation/check_catalogue.py": "34549b54aed506e088f16185b9e7be1f2dcd080573212bc60c044cb3ab1675ae",
+  "evaluation/check_code_freeze.py": "285239e15e390f138e807584c53983e7fe083a896946c1cbadcd52b1f1b10113",
+  "evaluation/check_protocol.py": "2911233d3cb3ddafeb312924c2c718fabc3d975b3b7bd348a9057764821e2d92",
+  "evaluation/circuits.py": "f0ca09ca565bc5c57a0850170738331a315c75625312fbb1b4cfbbc26252e4a3",
+  "evaluation/faults.py": "e850bcc2bc7c3bb8c740c5f99f5c5a2b38f1d3991c6eb0750a8f1f906282d001",
+  "evaluation/make_seeds.py": "4f7c0e57a04f67e7c0da807c8e79e63b776920efe7bab9cca7117e1c4a41fc1e",
+  "evaluation/manifest.json": "d76cac46b98ce50f9fa3f0ad41318267fe7f9b8261b6d9b5c23d912c2b367c56",
+  "evaluation/preflight/PREFLIGHT.md": "fef1d4bb2db6c0609e15e5ce00ad948c0f6a478127da7061876bf7c767819d0b",
+  "evaluation/preflight/catalogue.py": "6a04754bf507e73a5c867bc3ae4997d479d9778fcab990f8fb30245d4912b01b",
+  "evaluation/preflight/results/smoke-qiskit-2.0.3.json": "1361a595c048af37c8358d99670a116cf3b21e836f65b63b1096e94fa9a1e972",
+  "evaluation/preflight/results/smoke-qiskit-2.6.1.json": "6396358538777175d537834c2efe8eef93c6cfa609910ed6750facc18afcd448",
+  "evaluation/preflight/results/validate-qiskit-2.0.3.json": "15644265c9b8647ae8353314698d5673f032c93b28356b8266c9287499591255",
+  "evaluation/preflight/results/validate-qiskit-2.6.1.json": "867f701330f36198c9db4e9878f1e7ca30de4053c0caf1330fa04ba302289d1d",
+  "evaluation/preflight/smoke.py": "5bb2557bd6419a9c25d6cb638c8fc0c10f5680c3635ffd734c9712f705b478e4",
+  "evaluation/preflight/validate.py": "81cd0f7faa4e3360a0d38feb60b845cde63b777a0e7d08e842fe90bbb8e0ab31",
+  "evaluation/protocol.lock.json": "8d7c985febc9d0c89fd406c381d856b4e5da238dd363c7d05556555ea80701ea",
+  "evaluation/run_study.py": "845da00f9803b8d3231d1d0cdb490afd9602a110e6e91d9732a26e474fcf60c6",
+  "evaluation/study_config.py": "aa1e065aafadf6be01fb4c0c2cb95c0405d7046214e32d4b1025ef2e10cf5c84",
+  "evaluation/suites.py": "03593a18e3ae042ccca79102db3e5192ee588dcb36004fd65f2ebce34d90687a",
+  "pyproject.toml": "ab713804b6a854e7a19259293f7586e6702b4bed50f1f6f2dd5dbb6d4508b869",
+  "src/qmutate/__init__.py": "97e69e790b19eac056e1a45033af059548745c7aa79f3985e29eddd75af48556",
+  "src/qmutate/equivalence.py": "421585af37d1c8a5a6d88c758f76ba692ddb989629146f232dddfe3df571ae3c",
+  "src/qmutate/generator.py": "42b657caab581c8c80ded3ba339da04f2dd0cea18102d9b663cca2ebebc5d735",
+  "src/qmutate/metrics.py": "f2189ed063282708c98aef287fa39231869dce8d0ab6ce5dc6d376783bfecfb9",
+  "src/qmutate/mutation.py": "47fee48d0c4cd6b668bba8456fb5e37dbf256568f6e0c5a42aeb774d4a31a6cd",
+  "src/qmutate/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "src/qmutate/reporting.py": "01056e622263a242c445f2a9680f82f973651e6b62b09b753649c11805f516a5",
+  "src/qmutate/runner.py": "4bd58527a113d22a4f29bfa9ac9f933e7c3556947433834ed5897ac6844129df",
+  "src/qmutate/sampling.py": "7c43207ac31a8d703fa8d7a38a46d044079424ec382943d497a6c8219e5c55e1",
+  "tests/test_adjusted_metrics.py": "5beb70439e2c737e84081d00ff86332b7c6f14fe7fc6cc8f7f745fcdc862e14e",
+  "tests/test_equivalence.py": "6bdcf0e365cd0755f61b1a9b1cf1be2e4819c2ed9efd61e5e3dabb6e20672c44",
+  "tests/test_evaluation_harness.py": "5d1de52be595dae65b12f39716eae1aad96c8a56c9373eaea19d374c0421e03e",
+  "tests/test_generator.py": "f3827c08e182acc8a1ef4e128c1a15b2344d9159ed79b64623dc7dedfe017312",
+  "tests/test_metrics.py": "2857a8e38de54fabc2b0eae508f4ddb182591d08f34380802f39cf528695d2b1",
+  "tests/test_mutation.py": "4b10fc050a7d7f8f6ea12b01a826ea2827b256a8be38e8a3607b9ff133a1a8b9",
+  "tests/test_mutation_metrics.py": "fb7870590da6dfa93d21839b3a9ea631025c890600185154f45ff2b2e71a1119",
+  "tests/test_reporting.py": "4222194ff3e93c8d76a8d6f9bcbaac91001c708a5bcbc2247a3f111c96a66d6c",
+  "tests/test_runner.py": "5c29bc6018a044a918557b5675ee6d0abc8dc0f406f10b65e22cd060d07d6ca9",
+  "tests/test_sampling.py": "16a81b4aef732f0a6f6c226b3fdc4de8cdb4df7cf710931f08c6f9fe544f23e0"
+ },
+ "parameters": {
+  "ANALYSES": [
+   "primary",
+   "dedup_sensitivity"
+  ],
+  "APPLICABILITY": {
+   "C1": [
+    "T1",
+    "T3",
+    "T4",
+    "T5",
+    "T6"
+   ],
+   "C2": [
+    "T1",
+    "T2",
+    "T3",
+    "T4",
+    "T5",
+    "T6"
+   ],
+   "C3": [
+    "T1",
+    "T2",
+    "T3",
+    "T4",
+    "T5",
+    "T6"
+   ],
+   "C4": [
+    "T1",
+    "T2",
+    "T4",
+    "T5",
+    "T6"
+   ],
+   "C5": [
+    "T1",
+    "T4",
+    "T5",
+    "T6"
+   ],
+   "C6": [
+    "T1",
+    "T4",
+    "T5",
+    "T6"
+   ]
+  },
+  "CLASSIFIER_ATOL": 1e-08,
+  "DEDUP_SUITES": [
+   "T2",
+   "T3",
+   "T4",
+   "T5",
+   "T6"
+  ],
+  "FAULT_EXECUTION_CHECK_SHOTS": 16,
+  "FAULT_SETS": [
+   "all",
+   "without_missing_gate"
+  ],
+  "ORACLE_ALPHA": 0.05,
+  "ORACLE_TOLERANCE_TARGET": 0.05,
+  "OUTPUT_PREFIX": {
+   "full": "run-",
+   "pre_run_checks": "pre-run-"
+  },
+  "PERMUTATIONS": 100000,
+  "POOLED_STATISTICS": [
+   "tau_pooled",
+   "tau_pooled_def"
+  ],
+  "PRE_RUN_DELTA": 1e-06,
+  "PRE_RUN_EXACT_TOLERANCE": 1e-12,
+  "PRE_RUN_SHOTS": 100000,
+  "PROTECTED_PATHS": [
+   "evaluation/preflight",
+   "evaluation/manifest.json",
+   "evaluation/CATALOGUE_FREEZE.md",
+   "evaluation/PROTOCOL.md",
+   "evaluation/protocol.lock.json",
+   "evaluation/seeds.json",
+   "evaluation/code_freeze.json",
+   "evaluation/code_freeze.lock.json",
+   "evaluation/seeds.lock.json"
+  ],
+  "PROTOCOL_REVISION": 8,
+  "QMUTATE_SOURCE": "src/qmutate",
+  "REQUIRED_ENVIRONMENT": {
+   "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "RQ4_EXTRA_SEEDS": 20,
+  "SAMPLING_SUITES": [
+   "T2",
+   "T3",
+   "T4",
+   "T5"
+  ],
+  "SEEDED_SUITES": [
+   "T1",
+   "T2",
+   "T3",
+   "T4",
+   "T5"
+  ],
+  "SEED_FILE_REVISIONS": [
+   6,
+   7,
+   8
+  ],
+  "SHOTS": {
+   "T1": 16,
+   "T2": 1000,
+   "T3": 100,
+   "T4": 4000,
+   "T5": 8000
+  },
+  "STATE_GROUP_ATOL": 1e-08,
+  "SUITES": [
+   "T1",
+   "T2",
+   "T3",
+   "T4",
+   "T5",
+   "T6"
+  ],
+  "T4_BIT": {
+   "C1": 0,
+   "C2": 0,
+   "C3": 0,
+   "C4": 1,
+   "C5": 0,
+   "C6": 2
+  },
+  "T4_TOLERANCE": "1/20",
+  "T5_TOLERANCE": "1/20",
+  "T6_ATOL": 1e-08,
+  "T6_GROUP_FLOAT_SLACK": 1e-10,
+  "seed_slot_count": 404,
+  "seed_slot_schema_sha256": "1c37ddcdb9780134bee8abf349f372b0f22866f4b8f9387b28590877fbba3f45",
+  "study_spec_matches_config": true
+ },
+ "protocol_revision": 8,
+ "seeds": {
+  "hash_recorded_in": "evaluation/seeds.lock.json",
+  "path": "evaluation/seeds.json",
+  "policy": "generated once after the first approval and bound by --record-seeds; on a re-freeze the existing seeds are kept unchanged and their lock is re-bound by --rebind-seeds before approval; once recorded in the seed history they can never read as not generated"
+ },
+ "verified_without_content_hash": {
+  "evaluation/code_freeze.json": "SHA-256 recorded in evaluation/code_freeze.lock.json",
+  "evaluation/code_freeze.lock.json": "trust anchor; its content is reported to the mentor and recorded in results metadata",
+  "evaluation/freeze_history": "not hashed; every seeds_sha256 recorded in it and every archived seeds.json must equal evaluation/seeds.json, and it must hold no leftover partial file outside failed/",
+  "evaluation/seeds.lock.json": "created by --record-seeds or re-bound by --rebind-seeds; binds evaluation/seeds.json to this manifest's SHA-256"
+ }
+}

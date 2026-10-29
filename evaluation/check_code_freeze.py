@@ -1,0 +1,1082 @@
+"""Phase 6A code freeze: generate, verify, approve and extend ``evaluation/code_freeze.json``.
+
+Run from the project root, always with the documented environment:
+
+    VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -m evaluation.check_code_freeze
+    ... -m evaluation.check_code_freeze --write
+    ... -m evaluation.check_code_freeze --add-environment
+    ... -m evaluation.check_code_freeze --approve
+    ... -m evaluation.check_code_freeze --record-seeds
+    ... -m evaluation.check_code_freeze --retire evaluation/freeze_history/<version>
+    ... -m evaluation.check_code_freeze --rebind-seeds evaluation/freeze_history/<version>
+    ... -m evaluation.check_code_freeze --reject evaluation/freeze_history/<version>
+
+Every action runs on its own; ``--require-approved`` is accepted only without an action.
+
+Files and their roles:
+
+* ``code_freeze.json`` (the manifest) records content hashes of every covered file,
+  every outcome-affecting parameter, the seed-slot schema and each environment. It never
+  contains its own hash or the hash of its lock.
+* ``code_freeze.lock.json`` holds exactly ``manifest``, ``sha256`` and ``status``
+  (``proposed`` or ``approved``). It is the reference against which the manifest is
+  verified; its own content is the trust anchor, reported to the mentor and recorded in
+  every results file.
+* ``seeds.lock.json``, created by ``--record-seeds`` after ``make_seeds``, binds the seed
+  file's SHA-256 to the slot schema and to the manifest's SHA-256, so the approved
+  manifest never changes when seeds are generated.
+* ``evaluation/freeze_history/`` holds the seed history: every ``seeds_sha256`` recorded
+  there and every archived ``seeds.json`` must equal the live ``seeds.json``, so a missing
+  or replaced seed file or seeds lock fails the check instead of reading as "seeds not
+  generated yet".
+* A manifest written while seeds exist records their SHA-256 under ``seeds.sha256``, so
+  the seeds are anchored to the lock reported to the mentor: removing or replacing the
+  seed files and every history record still fails the check. ``seeds.json`` must also be
+  a valid seed file (slots, order, range and revision) before any check accepts it.
+
+``--write`` creates a new proposed manifest and lock and refuses if a manifest exists.
+``--add-environment`` adds the running environment to a proposed manifest if every other
+check passes. ``--approve`` sets the lock status to ``approved`` if every check passes and
+every environment in ``REQUIRED_QISKIT_VERSIONS`` is recorded. ``--record-seeds`` makes
+the first seed binding: it requires an approved freeze, an existing seed file, no seeds
+lock and no seed history, and records ``SEEDS_RECORD.json`` in the history directory.
+
+Re-freeze when seeds already exist (protocol revision 9): ``--retire`` archives the live
+manifest and lock byte-identically into a history directory and removes them, once the
+outgoing version of every changed covered file is archived there as ``.orig``; after
+``--write`` and ``--add-environment``, ``--rebind-seeds`` archives the existing seeds lock
+into the same directory and re-binds the unchanged ``seeds.json`` to the new proposed
+manifest. ``--reject`` sets a proposed freeze aside into ``<history>/rejected/`` and makes
+the outgoing approved freeze in that directory live again. Every step is resumable and
+every intermediate state fails the freeze check. Partial files are never removed by the
+tool. The checker never generates seeds, writes ``seeds.json``, samples, or runs a suite.
+"""
+
+import hashlib
+import json
+import os
+import platform
+import sys
+from fractions import Fraction
+from importlib import import_module, metadata
+from pathlib import Path
+
+PROJECT = Path(__file__).resolve().parent.parent
+FREEZE_FILE = "evaluation/code_freeze.json"
+LOCK_FILE = "evaluation/code_freeze.lock.json"
+SEEDS_FILE = "evaluation/seeds.json"
+SEEDS_LOCK_FILE = "evaluation/seeds.lock.json"
+REQUIRED_ENVIRONMENT = {"VECLIB_MAXIMUM_THREADS": "1"}
+ENTRY_MODULES = (
+    "evaluation.run_study",
+    "evaluation.check_catalogue",
+    "evaluation.check_protocol",
+    "evaluation.check_code_freeze",
+    "evaluation.make_seeds",
+)
+HISTORY_ROOT = "evaluation/freeze_history"
+SEEDS_RECORD_FILE = "evaluation/freeze_history/SEEDS_RECORD.json"
+RETIREMENT_RECORD = "FREEZE_RETIREMENT.json"
+REBIND_RECORD = "SEEDS_REBIND.json"
+REJECTION_RECORD = "FREEZE_REJECTION.json"
+REJECTED_DIR = "rejected"
+FAILED_DIR = "failed"
+ORIGINAL_SUFFIX = ".orig"
+REJECTED_SUFFIX = ".rejected"
+LOCK_KEYS = ("manifest", "sha256", "status")
+SEEDS_LOCK_KEYS = ("code_freeze_sha256", "seed_slot_schema_sha256", "seeds_sha256")
+REQUIRED_QISKIT_VERSIONS = ("2.0.3", "2.6.1")
+RECORDED_DISTRIBUTIONS = ("qiskit", "numpy", "scipy", "rustworkx", "symengine", "dill", "stevedore", "sympy")
+
+
+def sha256_bytes(data):
+    """Return the SHA-256 hex digest of ``data``."""
+    return hashlib.sha256(data).hexdigest()
+
+
+def covered_files(root=PROJECT):
+    """Return ``{group: [project-relative paths]}`` of every file whose content the manifest hashes."""
+    def rel(paths):
+        return sorted(str(p.relative_to(root)) for p in paths if p.is_file())
+
+    return {
+        "evaluation_code": rel(list(root.glob("evaluation/*.py")) + list(root.glob("evaluation/preflight/*.py"))),
+        "qmutate_source": rel(list(root.glob("src/qmutate/*.py")) + [root / "src/qmutate/py.typed"]),
+        "harness_tests": rel([root / "tests/test_evaluation_harness.py"]),
+        "existing_tests": rel(p for p in root.glob("tests/*.py") if p.name != "test_evaluation_harness.py"),
+        "protocol": rel([root / "evaluation/PROTOCOL.md", root / "evaluation/protocol.lock.json"]),
+        "catalogue": rel([root / "evaluation/preflight/catalogue.py", root / "evaluation/manifest.json",
+                          root / "evaluation/CATALOGUE_FREEZE.md"]),
+        "preflight_evidence": rel([root / "evaluation/preflight/PREFLIGHT.md"]
+                                  + list(root.glob("evaluation/preflight/results/*.json"))),
+        "build": rel([root / "pyproject.toml"]),
+    }
+
+
+def file_hashes(root=PROJECT):
+    """Return ``{path: SHA-256}`` for every covered file."""
+    files = sorted({path for group in covered_files(root).values() for path in group})
+    return {path: sha256_bytes((root / path).read_bytes()) for path in files}
+
+
+def _plain(value):
+    if isinstance(value, Fraction):
+        return f"{value.numerator}/{value.denominator}"
+    if isinstance(value, dict):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_plain(v) for v in value]
+    return value
+
+
+def parameters():
+    """Return every outcome-affecting parameter, read from ``study_config`` and the study spec."""
+    from evaluation import run_study, study_config
+
+    spec = run_study.study_spec()
+    names = ("PROTOCOL_REVISION", "SUITES", "SAMPLING_SUITES", "SEEDED_SUITES", "DEDUP_SUITES", "SHOTS",
+             "T4_TOLERANCE", "T5_TOLERANCE", "T6_ATOL", "CLASSIFIER_ATOL", "PRE_RUN_EXACT_TOLERANCE",
+             "PRE_RUN_SHOTS", "PRE_RUN_DELTA", "STATE_GROUP_ATOL", "T6_GROUP_FLOAT_SLACK",
+             "FAULT_EXECUTION_CHECK_SHOTS", "APPLICABILITY", "T4_BIT", "RQ4_EXTRA_SEEDS", "PERMUTATIONS",
+             "ORACLE_ALPHA", "ORACLE_TOLERANCE_TARGET", "FAULT_SETS", "ANALYSES", "POOLED_STATISTICS",
+             "OUTPUT_PREFIX", "QMUTATE_SOURCE", "PROTECTED_PATHS", "REQUIRED_ENVIRONMENT", "SEED_FILE_REVISIONS")
+    values = {name: _plain(getattr(study_config, name)) for name in names}
+    slots = study_config.seed_slots()
+    values["seed_slot_count"] = len(slots)
+    values["seed_slot_schema_sha256"] = sha256_bytes("\n".join(slots).encode())
+    values["study_spec_matches_config"] = (
+        spec.shots == study_config.SHOTS
+        and spec.pre_run_shots == study_config.PRE_RUN_SHOTS
+        and spec.pre_run_delta == study_config.PRE_RUN_DELTA
+        and spec.pre_run_tolerance == study_config.PRE_RUN_EXACT_TOLERANCE
+        and spec.classifier_atol == study_config.CLASSIFIER_ATOL
+        and spec.group_atol == study_config.STATE_GROUP_ATOL
+        and spec.t6_atol == study_config.T6_ATOL
+        and spec.t6_slack == study_config.T6_GROUP_FLOAT_SLACK
+        and spec.fault_check_shots == study_config.FAULT_EXECUTION_CHECK_SHOTS
+        and spec.permutations == study_config.PERMUTATIONS
+        and spec.rq4_seeds == study_config.RQ4_EXTRA_SEEDS
+        and spec.oracle_target == study_config.ORACLE_TOLERANCE_TARGET
+        and spec.oracle_alpha == study_config.ORACLE_ALPHA
+        and spec.dedup_suites == study_config.DEDUP_SUITES
+        and spec.oracle_factory is None
+    )
+    return values
+
+
+def imported_project_modules(root=PROJECT):
+    """Import every entry point and return the project-relative files of all loaded project modules."""
+    for name in ENTRY_MODULES:
+        import_module(name)
+    files = set()
+    for module in list(sys.modules.values()):
+        location = getattr(module, "__file__", None)
+        if not location or location.startswith("<"):
+            continue
+        path = Path(location).resolve()
+        if PROJECT in path.parents and ".venv" not in path.parts:
+            files.add(str(path.relative_to(PROJECT)))
+    return sorted(files)
+
+
+def _qmutate_installation():
+    try:
+        distribution = metadata.distribution("qmutate")
+    except metadata.PackageNotFoundError:
+        return {"installed": False}
+    direct = distribution.read_text("direct_url.json")
+    editable = bool(direct and json.loads(direct).get("dir_info", {}).get("editable"))
+    return {"installed": True, "version": distribution.version, "editable": editable}
+
+
+def environment():
+    """Return a description of the running environment, without absolute paths."""
+    import numpy
+    import qiskit
+    import qmutate
+    from qiskit.providers.basic_provider import BasicSimulator
+
+    location = Path(qmutate.__file__).resolve().parent
+    source = (PROJECT / "src" / "qmutate").resolve()
+    blas = numpy.show_config(mode="dicts").get("Build Dependencies", {}).get("blas", {})
+    records = {}
+    for name in RECORDED_DISTRIBUTIONS:
+        try:
+            distribution = metadata.distribution(name)
+        except metadata.PackageNotFoundError:
+            continue
+        record = distribution.read_text("RECORD") or ""
+        records[name] = {"version": distribution.version, "record_sha256": sha256_bytes(record.encode())}
+    return {
+        "python": sys.version.split()[0],
+        "implementation": platform.python_implementation(),
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "qiskit": qiskit.__version__,
+        "numpy": numpy.__version__,
+        "numpy_blas": {"name": blas.get("name"), "version": blas.get("version")},
+        "basic_simulator": BasicSimulator().backend_version,
+        "qmutate_imported_from": "src/qmutate" if location == source else "outside the project",
+        "qmutate_installed_copy": _qmutate_installation(),
+        "environment_variables": {name: os.environ.get(name) for name in sorted(REQUIRED_ENVIRONMENT)},
+        "key_distributions": records,
+        "all_distributions": dict(sorted((d.metadata["Name"].lower(), d.version)
+                                         for d in metadata.distributions() if d.metadata["Name"])),
+    }
+
+
+def build_freeze(environments, root=PROJECT, seeds_sha256=None):
+    """Return a manifest of the project at ``root`` with the given environments.
+
+    ``seeds_sha256`` is the SHA-256 of the seeds that exist when the manifest is written, or
+    ``None`` before any seeds exist; it anchors the seeds to this manifest and its lock.
+    """
+    from evaluation import study_config
+
+    return {
+        "catalogue_version": "phase6a-catalogue-v1",
+        "protocol_revision": study_config.PROTOCOL_REVISION,
+        "covers": covered_files(root),
+        "files_sha256": file_hashes(root),
+        "parameters": parameters(),
+        "seeds": {"path": SEEDS_FILE, "hash_recorded_in": SEEDS_LOCK_FILE, "sha256": seeds_sha256,
+                  "policy": "generated once after the first approval and bound by --record-seeds; on a re-freeze "
+                            "the existing seeds are kept unchanged, their SHA-256 is recorded here, and their lock "
+                            "is re-bound by --rebind-seeds before approval; once recorded in the seed history or "
+                            "here they can never read as not generated"},
+        "verified_without_content_hash": {
+            FREEZE_FILE: f"SHA-256 recorded in {LOCK_FILE}",
+            LOCK_FILE: "trust anchor; its content is reported to the mentor and recorded in results metadata",
+            SEEDS_LOCK_FILE: f"created by --record-seeds or re-bound by --rebind-seeds; binds {SEEDS_FILE} "
+                             "to this manifest's SHA-256",
+            HISTORY_ROOT: f"not hashed; every seeds_sha256 recorded in it and every archived seeds.json must "
+                          f"equal {SEEDS_FILE}, and it must hold no leftover partial file outside failed/",
+        },
+        "environments": dict(sorted(environments.items())),
+        "commands": {
+            "freeze_check": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 "
+                            "python -m evaluation.check_code_freeze",
+            "catalogue_check": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 "
+                               "python -m evaluation.check_catalogue",
+            "protocol_check": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 "
+                              "python -m evaluation.check_protocol",
+            "tests": "VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -W default "
+                     "-m pytest -p no:cacheprovider -q --no-header tests",
+        },
+    }
+
+
+def _serialize(document):
+    return (json.dumps(document, indent=1, sort_keys=True) + "\n").encode()
+
+
+def _write_exclusive(path, data):
+    with open(path, "xb") as handle:
+        handle.write(data)
+
+
+class RefreezeError(Exception):
+    """A freeze step refused to act."""
+
+
+def _partial(path):
+    return path.with_name(f".{path.name}.partial")
+
+
+def _open_partial(path):
+    partial = _partial(path)
+    try:
+        return partial, open(partial, "xb")
+    except FileExistsError as error:
+        raise RefreezeError(f"leftover partial file {partial.name} next to {path.name} is kept as evidence; "
+                            "follow the protocol's recovery for leftover partial files") from error
+
+
+def _replace(path, data):
+    """Replace ``path`` with ``data`` through a synced partial file and ``os.replace``.
+
+    ``os.replace`` is atomic within one POSIX file system, so ``path`` holds either its old
+    or its new bytes. A leftover partial file is refused, and a partial file left by a
+    failure here stays in place; the tool never removes either.
+    """
+    partial, handle = _open_partial(path)
+    with handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(partial, path)
+
+
+def _publish(path, data):
+    """Create ``path`` holding ``data``, or accept an identical existing file; never overwrite.
+
+    The bytes go to an exclusively created hidden partial file, which is synced and
+    hard-linked to ``path``, so ``path`` either does not exist or is complete. Only after a
+    successful link is the partial name removed, since it then names the same file. An
+    existing ``path`` with other content, or a leftover partial file, is refused, and a
+    partial file left by a failure stays in place. Returns whether a new file was created.
+    """
+    if path.exists():
+        if path.read_bytes() != data:
+            raise RefreezeError(f"{path.name} already exists with different content")
+        return False
+    partial, handle = _open_partial(path)
+    with handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+    try:
+        os.link(partial, path)
+    except FileExistsError as error:
+        raise RefreezeError(f"{path.name} appeared while it was being written; {partial.name} is kept") from error
+    partial.unlink()
+    if path.read_bytes() != data:
+        raise RefreezeError(f"{path.name} does not hold the bytes just written")
+    return True
+
+
+def _remove(path):
+    path.unlink()
+
+
+def _digest(data):
+    return None if data is None else sha256_bytes(data)
+
+
+def _load_json(data, name):
+    try:
+        return json.loads(data)
+    except ValueError as error:
+        raise RefreezeError(f"{name} is not valid JSON") from error
+
+
+def archive_name(path, suffix):
+    """Return the archive file name of a covered ``path``: slashes become ``__``, then ``suffix``."""
+    return path.replace("/", "__") + suffix
+
+
+def lock_problem(lock, manifest_bytes):
+    """Return why ``lock`` is not a valid lock of ``manifest_bytes``, or ``None``."""
+    if not isinstance(lock, dict):
+        return "the lock is not a JSON object"
+    if tuple(sorted(lock)) != LOCK_KEYS:
+        return f"the lock fields are {sorted(lock)}, not {list(LOCK_KEYS)}"
+    if lock["manifest"] != FREEZE_FILE:
+        return f"the lock names {lock['manifest']!r}, not {FREEZE_FILE}"
+    if lock["sha256"] != sha256_bytes(manifest_bytes):
+        return "the lock does not match the manifest"
+    if lock["status"] not in ("proposed", "approved"):
+        return f"unknown lock status {lock['status']!r}"
+    return None
+
+
+def _checked_lock(lock_bytes, manifest_bytes, name):
+    lock = _load_json(lock_bytes, name)
+    problem = lock_problem(lock, manifest_bytes)
+    if problem:
+        raise RefreezeError(f"{name}: {problem}")
+    return lock
+
+
+def _manifest_document(data, name):
+    document = _load_json(data, name)
+    if not (isinstance(document, dict) and isinstance(document.get("files_sha256"), dict)
+            and isinstance(document.get("parameters"), dict)):
+        raise RefreezeError(f"{name} is not a manifest")
+    return document
+
+
+def _seeds_lock_document(data, name):
+    document = _load_json(data, name)
+    if not isinstance(document, dict) or tuple(sorted(document)) != SEEDS_LOCK_KEYS:
+        raise RefreezeError(f"{name} does not have the seeds lock fields")
+    return document
+
+
+def _history_dir(root, argument):
+    if not argument or argument.startswith("--"):
+        raise RefreezeError(f"a history directory inside {HISTORY_ROOT} is required")
+    candidate = Path(argument)
+    path = (candidate if candidate.is_absolute() else root / candidate).resolve()
+    if (root / HISTORY_ROOT).resolve() not in path.parents:
+        raise RefreezeError(f"the history directory must be inside {HISTORY_ROOT}")
+    return path
+
+
+def _in_failed(path, base):
+    return FAILED_DIR in path.relative_to(base).parts[:-1]
+
+
+def recorded_seed_hashes(root=PROJECT):
+    """Return ``({seeds SHA-256: [recording files]}, problems)`` from the seed history.
+
+    Hashes come from the ``seeds_sha256`` field of every JSON file under the history
+    directory and from every archived ``seeds.json``. Hidden files and ``failed``
+    directories, which hold evidence of interrupted writes, are skipped. A JSON file that
+    cannot be read, or a ``seeds_sha256`` that is neither a string nor null, is a problem.
+    """
+    history = root / HISTORY_ROOT
+    hashes, problems = {}, []
+    if not history.is_dir():
+        return hashes, problems
+    for path in sorted(history.rglob("*")):
+        if not path.is_file() or path.name.startswith(".") or _in_failed(path, history):
+            continue
+        relative = str(path.relative_to(root))
+        if path.name == "seeds.json":
+            hashes.setdefault(sha256_bytes(path.read_bytes()), []).append(relative)
+            continue
+        if path.suffix != ".json":
+            continue
+        try:
+            document = json.loads(path.read_bytes())
+        except ValueError:
+            problems.append(f"{relative} is not valid JSON")
+            continue
+        if isinstance(document, dict) and "seeds_sha256" in document:
+            value = document["seeds_sha256"]
+            if isinstance(value, str):
+                hashes.setdefault(value, []).append(relative)
+            elif value is not None:
+                problems.append(f"{relative} has a malformed seeds_sha256")
+    return hashes, problems
+
+
+def leftover_partials(root=PROJECT):
+    """Return every leftover ``.partial`` file of a live freeze file or under the history directory.
+
+    A partial file is evidence of an interrupted write and is never removed by the tool.
+    Files moved into a ``failed`` directory under the history directory are not reported.
+    """
+    candidates = [_partial(root / name) for name in (FREEZE_FILE, LOCK_FILE, SEEDS_LOCK_FILE, SEEDS_FILE)]
+    history = root / HISTORY_ROOT
+    if history.is_dir():
+        candidates += [p for p in history.rglob(".*.partial") if not _in_failed(p, history)]
+    return sorted(str(p.relative_to(root)) for p in candidates if p.exists())
+
+
+def seed_file_problem(path):
+    """Return why ``path`` is not a valid seed file of this protocol, or ``None``.
+
+    The file must parse, list exactly ``study_config.seed_slots()`` in order with integer
+    seeds in range, and record a revision in ``study_config.SEED_FILE_REVISIONS``. An empty,
+    truncated or otherwise malformed file is a problem, never an accepted seed file.
+    """
+    from evaluation import make_seeds, study_config
+
+    try:
+        make_seeds.load_seeds(path, study_config.seed_slots(), study_config.SEED_FILE_REVISIONS)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        return f"{type(error).__name__}: {error}"
+    return None
+
+
+def seeds_to_anchor(root=PROJECT):
+    """Return the SHA-256 a new manifest must record for the existing seeds, or ``None``.
+
+    Without ``seeds.json`` and without any seed history there is nothing to anchor. Otherwise
+    ``seeds.json`` must be a valid seed file and the only seeds recorded in the seed
+    history; a missing, invalid or unrecorded seed file is refused, so a new manifest can
+    never forget seeds that were already generated.
+    """
+    seeds = root / SEEDS_FILE
+    recorded, problems = recorded_seed_hashes(root)
+    if problems:
+        raise RefreezeError(f"the seed history cannot be read: {problems}")
+    if not seeds.is_file():
+        if recorded:
+            raise RefreezeError("seeds are recorded in the seed history but seeds.json is missing; restore it "
+                                "byte-identically before --write")
+        return None
+    problem = seed_file_problem(seeds)
+    if problem:
+        raise RefreezeError(f"seeds.json is not a valid seed file ({problem})")
+    digest = sha256_bytes(seeds.read_bytes())
+    if set(recorded) != {digest}:
+        raise RefreezeError("seeds.json is not the one seed file recorded in the seed history")
+    return digest
+
+
+def _refuse_rejected_cycle(history, root):
+    if (history / REJECTED_DIR).exists():
+        raise RefreezeError(f"{history.relative_to(root)} holds a rejected cycle; a new cycle needs a new "
+                            "history directory")
+
+
+def retire(root, argument):
+    """Archive the live manifest and lock into ``argument`` byte-identically, then remove them.
+
+    The outgoing version of every covered file whose content changed or that is missing must
+    already be archived in ``argument`` as ``<archive name>.orig`` with the outgoing hash,
+    so a full rollback stays possible. The archive copies and a ``FREEZE_RETIREMENT.json``
+    record are published before anything is removed, and the lock is removed before the
+    manifest. A run interrupted at any point can be repeated: identical archives are
+    accepted, and a manifest left without its lock is removed once its archive is
+    confirmed. Every intermediate state fails the freeze check, because the live manifest or
+    lock is missing or they disagree.
+    """
+    history = _history_dir(root, argument)
+    _refuse_rejected_cycle(history, root)
+    manifest_path, lock_path = root / FREEZE_FILE, root / LOCK_FILE
+    archived_manifest, archived_lock = history / "code_freeze.json", history / "code_freeze.lock.json"
+    record_path = history / RETIREMENT_RECORD
+    if not manifest_path.is_file():
+        if lock_path.exists():
+            raise RefreezeError("a lock exists without a manifest; inspect it manually")
+        if archived_manifest.is_file() and archived_lock.is_file() and record_path.is_file():
+            print("freeze already retired into", history.relative_to(root))
+            return
+        raise RefreezeError("there is no live manifest to retire")
+    manifest_bytes = manifest_path.read_bytes()
+    if lock_path.is_file():
+        lock_bytes = lock_path.read_bytes()
+    elif archived_manifest.is_file() and archived_lock.is_file() and archived_manifest.read_bytes() == manifest_bytes:
+        lock_bytes = archived_lock.read_bytes()
+    else:
+        raise RefreezeError("a manifest exists without a lock and without a matching archive; inspect it manually")
+    lock = _checked_lock(lock_bytes, manifest_bytes, LOCK_FILE)
+    outgoing = _manifest_document(manifest_bytes, FREEZE_FILE)
+    originals, missing = {}, []
+    for path, digest in sorted(outgoing["files_sha256"].items()):
+        live = root / path
+        if live.is_file() and sha256_bytes(live.read_bytes()) == digest:
+            continue
+        original = history / archive_name(path, ORIGINAL_SUFFIX)
+        if original.is_file() and sha256_bytes(original.read_bytes()) == digest:
+            originals[path] = digest
+        else:
+            missing.append(path)
+    if missing:
+        raise RefreezeError(f"step 0 is incomplete: no {ORIGINAL_SUFFIX} copy with the outgoing hash in "
+                            f"{history.relative_to(root)} for {missing}")
+    seeds_path = root / SEEDS_FILE
+    history.mkdir(parents=True, exist_ok=True)
+    _publish(archived_manifest, manifest_bytes)
+    _publish(archived_lock, lock_bytes)
+    _publish(record_path, _serialize({
+        "operation": "retire",
+        "manifest_sha256": sha256_bytes(manifest_bytes),
+        "lock_sha256": sha256_bytes(lock_bytes),
+        "lock_status": lock["status"],
+        "retired_protocol_revision": outgoing.get("protocol_revision"),
+        "originals_sha256": originals,
+        "seeds_sha256": sha256_bytes(seeds_path.read_bytes()) if seeds_path.is_file() else None,
+    }))
+    if archived_manifest.read_bytes() != manifest_bytes or archived_lock.read_bytes() != lock_bytes:
+        raise RefreezeError("the archive does not hold the live files' bytes")
+    if lock_path.exists():
+        _remove(lock_path)
+    _remove(manifest_path)
+    print(f"retired the freeze into {history.relative_to(root)}; no live freeze until --write")
+
+
+def rebind_seeds(root, argument):
+    """Re-bind the existing seeds lock to the live proposed manifest, keeping ``seeds.json``.
+
+    Every condition is checked before anything is written: a proposed freeze whose lock
+    matches its manifest and whose other checks pass, including the seed history and the
+    absence of leftover partial files; ``seeds.json`` byte-identical to the hash in the
+    existing seeds lock; an unchanged slot schema; and an existing seeds lock bound to the
+    retired, approved manifest archived in ``argument``. The old seeds lock and a
+    ``SEEDS_REBIND.json`` record are then published into ``argument``, and only then is the
+    live seeds lock replaced with ``os.replace``. ``seeds.json`` is never written. Until the
+    replacement the old lock stays live and the freeze check fails; a repeated run resumes,
+    and after the replacement it reports the completed re-bind.
+    """
+    history = _history_dir(root, argument)
+    _refuse_rejected_cycle(history, root)
+    manifest_path, lock_path = root / FREEZE_FILE, root / LOCK_FILE
+    seeds_path, seeds_lock_path = root / SEEDS_FILE, root / SEEDS_LOCK_FILE
+    for path, hint in ((manifest_path, ""), (lock_path, ""), (seeds_path, ""),
+                       (seeds_lock_path, "; a first binding uses --record-seeds after approval")):
+        if not path.is_file():
+            raise RefreezeError(f"{path.relative_to(root)} does not exist{hint}")
+    manifest_bytes = manifest_path.read_bytes()
+    manifest_sha = sha256_bytes(manifest_bytes)
+    lock = _checked_lock(lock_path.read_bytes(), manifest_bytes, LOCK_FILE)
+    if lock["status"] != "proposed":
+        raise RefreezeError(f"only a proposed freeze can have its seeds re-bound (status {lock['status']!r})")
+    failing = [name for name, passed, _ in verify(root) if not passed and not name.startswith("seeds")]
+    if failing:
+        raise RefreezeError(f"the proposed freeze does not verify: {failing}")
+    seeds_bytes = seeds_path.read_bytes()
+    seeds_sha = sha256_bytes(seeds_bytes)
+    old_bytes = seeds_lock_path.read_bytes()
+    old = _seeds_lock_document(old_bytes, SEEDS_LOCK_FILE)
+    schema = _manifest_document(manifest_bytes, FREEZE_FILE)["parameters"].get("seed_slot_schema_sha256")
+    if old["seeds_sha256"] != seeds_sha:
+        raise RefreezeError("seeds.json does not match the hash recorded in the existing seeds lock")
+    if old["seed_slot_schema_sha256"] != schema:
+        raise RefreezeError("the seed slot schema changed; these seeds cannot be re-bound")
+    new_bytes = _serialize({"seeds_sha256": seeds_sha, "seed_slot_schema_sha256": schema,
+                            "code_freeze_sha256": manifest_sha})
+    archived_lock_path, record_path = history / "seeds.lock.json", history / REBIND_RECORD
+    if old["code_freeze_sha256"] == manifest_sha:
+        if old_bytes == new_bytes and archived_lock_path.is_file() and record_path.is_file():
+            record = _load_json(record_path.read_bytes(), REBIND_RECORD)
+            if (isinstance(record, dict) and record.get("new_code_freeze_sha256") == manifest_sha
+                    and record.get("new_seeds_lock_sha256") == sha256_bytes(new_bytes)
+                    and record.get("previous_seeds_lock_sha256") == sha256_bytes(archived_lock_path.read_bytes())):
+                print("seeds lock already re-bound to this manifest")
+                return
+        raise RefreezeError("the seeds lock is already bound to this manifest without a matching re-bind record")
+    retired_manifest, retired_lock_path = history / "code_freeze.json", history / "code_freeze.lock.json"
+    if not (retired_manifest.is_file() and retired_lock_path.is_file()):
+        raise RefreezeError("the retired freeze is not archived in the history directory")
+    retired_bytes = retired_manifest.read_bytes()
+    retired_lock = _checked_lock(retired_lock_path.read_bytes(), retired_bytes, "the retired lock")
+    if old["code_freeze_sha256"] != sha256_bytes(retired_bytes):
+        raise RefreezeError("the existing seeds lock is not bound to the retired manifest")
+    if retired_lock["status"] != "approved":
+        raise RefreezeError("the retired freeze was not an approved freeze")
+    record = _serialize({
+        "operation": "rebind-seeds",
+        "seeds_sha256": seeds_sha,
+        "seed_slot_schema_sha256": schema,
+        "previous_seeds_lock_sha256": sha256_bytes(old_bytes),
+        "previous_code_freeze_sha256": old["code_freeze_sha256"],
+        "new_code_freeze_sha256": manifest_sha,
+        "new_seeds_lock_sha256": sha256_bytes(new_bytes),
+    })
+    _publish(archived_lock_path, old_bytes)
+    _publish(record_path, record)
+    if seeds_path.read_bytes() != seeds_bytes or seeds_lock_path.read_bytes() != old_bytes:
+        raise RefreezeError("seeds.json or the seeds lock changed during the re-bind")
+    _replace(seeds_lock_path, new_bytes)
+    if seeds_path.read_bytes() != seeds_bytes:
+        raise RefreezeError("seeds.json changed during the re-bind")
+    print(f"re-bound {SEEDS_LOCK_FILE} to the proposed manifest; old lock archived in {history.relative_to(root)}")
+
+
+def _outgoing_freeze(root, history):
+    """Return the archived outgoing approved freeze of ``history`` as bytes, after checking it."""
+    manifest_path, lock_path = history / "code_freeze.json", history / "code_freeze.lock.json"
+    retirement_path, seeds_lock_path = history / RETIREMENT_RECORD, history / "seeds.lock.json"
+    if not (manifest_path.is_file() and lock_path.is_file() and retirement_path.is_file()):
+        raise RefreezeError(f"no retired freeze is archived in {history.relative_to(root)}")
+    manifest_bytes, lock_bytes = manifest_path.read_bytes(), lock_path.read_bytes()
+    _manifest_document(manifest_bytes, "the outgoing manifest")
+    if _checked_lock(lock_bytes, manifest_bytes, "the outgoing lock")["status"] != "approved":
+        raise RefreezeError("the outgoing freeze was not an approved freeze")
+    retirement = _load_json(retirement_path.read_bytes(), RETIREMENT_RECORD)
+    if not (isinstance(retirement, dict) and retirement.get("manifest_sha256") == sha256_bytes(manifest_bytes)
+            and retirement.get("lock_sha256") == sha256_bytes(lock_bytes)):
+        raise RefreezeError(f"{RETIREMENT_RECORD} does not match the archived outgoing freeze")
+    seeds_lock_bytes = seeds_lock_path.read_bytes() if seeds_lock_path.is_file() else None
+    if seeds_lock_bytes is not None:
+        bound = _seeds_lock_document(seeds_lock_bytes, "the archived outgoing seeds lock")
+        if bound["code_freeze_sha256"] != sha256_bytes(manifest_bytes):
+            raise RefreezeError("the archived outgoing seeds lock is not bound to the outgoing manifest")
+    return {"manifest": manifest_bytes, "lock": lock_bytes, "seeds_lock": seeds_lock_bytes}
+
+
+def _prepare_rejection(root, history, outgoing):
+    """Check the live proposed freeze, publish its copies into ``rejected/`` and return the record bytes."""
+    rejected = history / REJECTED_DIR
+    manifest_path, lock_path = root / FREEZE_FILE, root / LOCK_FILE
+    seeds_path, seeds_lock_path = root / SEEDS_FILE, root / SEEDS_LOCK_FILE
+    if not (manifest_path.is_file() and lock_path.is_file()):
+        raise RefreezeError("there is no live proposed freeze to reject")
+    manifest_bytes, lock_bytes = manifest_path.read_bytes(), lock_path.read_bytes()
+    lock = _checked_lock(lock_bytes, manifest_bytes, LOCK_FILE)
+    if lock["status"] != "proposed":
+        raise RefreezeError(f"only a proposed freeze can be rejected (status {lock['status']!r})")
+    manifest = _manifest_document(manifest_bytes, FREEZE_FILE)
+    outgoing_files = _manifest_document(outgoing["manifest"], "the outgoing manifest")["files_sha256"]
+    copies, missing = {}, []
+    for path, digest in sorted(manifest["files_sha256"].items()):
+        if outgoing_files.get(path) == digest:
+            continue
+        copy = rejected / archive_name(path, REJECTED_SUFFIX)
+        if copy.is_file() and sha256_bytes(copy.read_bytes()) == digest:
+            copies[path] = digest
+        else:
+            missing.append(path)
+    if missing:
+        raise RefreezeError(f"the rejected freeze's versions are not preserved in {rejected.relative_to(root)} "
+                            f"as {REJECTED_SUFFIX} copies: {missing}")
+    seeds_sha = sha256_bytes(seeds_path.read_bytes()) if seeds_path.is_file() else None
+    live_seeds_lock = seeds_lock_path.read_bytes() if seeds_lock_path.is_file() else None
+    restored_seeds_lock = live_seeds_lock
+    if seeds_sha is not None or live_seeds_lock is not None:
+        if seeds_sha is None or live_seeds_lock is None:
+            raise RefreezeError("seeds.json and its lock must both exist")
+        bound = _seeds_lock_document(live_seeds_lock, SEEDS_LOCK_FILE)
+        if bound["seeds_sha256"] != seeds_sha:
+            raise RefreezeError("seeds.json does not match its lock")
+        if bound["code_freeze_sha256"] == sha256_bytes(manifest_bytes):
+            record = _load_json((history / REBIND_RECORD).read_bytes(), REBIND_RECORD) \
+                if (history / REBIND_RECORD).is_file() else None
+            if not (outgoing["seeds_lock"] is not None and isinstance(record, dict)
+                    and record.get("new_code_freeze_sha256") == sha256_bytes(manifest_bytes)
+                    and record.get("new_seeds_lock_sha256") == sha256_bytes(live_seeds_lock)
+                    and record.get("previous_seeds_lock_sha256") == sha256_bytes(outgoing["seeds_lock"])
+                    and record.get("seeds_sha256") == seeds_sha):
+                raise RefreezeError("the re-bound seeds lock has no matching re-bind record and archived lock")
+            restored_seeds_lock = outgoing["seeds_lock"]
+        elif bound["code_freeze_sha256"] == sha256_bytes(outgoing["manifest"]):
+            if outgoing["seeds_lock"] is not None and live_seeds_lock != outgoing["seeds_lock"]:
+                raise RefreezeError("the live seeds lock differs from the archived outgoing seeds lock")
+        else:
+            raise RefreezeError("the seeds lock is bound to neither the rejected nor the outgoing manifest")
+    rejected.mkdir(exist_ok=True)
+    _publish(rejected / "code_freeze.json", manifest_bytes)
+    _publish(rejected / "code_freeze.lock.json", lock_bytes)
+    if live_seeds_lock is not None:
+        _publish(rejected / "seeds.lock.json", live_seeds_lock)
+    return _serialize({
+        "operation": "reject",
+        "rejected_manifest_sha256": sha256_bytes(manifest_bytes),
+        "rejected_lock_sha256": sha256_bytes(lock_bytes),
+        "rejected_seeds_lock_sha256": _digest(live_seeds_lock),
+        "rejected_files_sha256": copies,
+        "restored_manifest_sha256": sha256_bytes(outgoing["manifest"]),
+        "restored_lock_sha256": sha256_bytes(outgoing["lock"]),
+        "restored_seeds_lock_sha256": _digest(restored_seeds_lock),
+        "seeds_sha256": seeds_sha,
+    })
+
+
+def reject(root, argument):
+    """Set the live proposed freeze aside and make the outgoing approved freeze of ``argument`` live again.
+
+    Before anything is written, the live lock must be a valid ``proposed`` lock of the live
+    manifest; ``argument`` must hold the retired approved freeze with its retirement
+    record; the rejected freeze's version of every covered file that differs from the
+    outgoing manifest must already be preserved as ``rejected/<archive name>.rejected``;
+    and the live seeds lock must be either the outgoing one or the re-bound one recorded in
+    ``SEEDS_REBIND.json``. The live manifest, lock and seeds lock are then published into
+    ``<argument>/rejected/`` with a ``FREEZE_REJECTION.json`` record. Only then are the live
+    lock and manifest removed, the outgoing seeds lock put back with ``os.replace``, and the
+    outgoing manifest and lock published, the lock last. ``seeds.json`` is never written and
+    covered files are never touched. Every intermediate state fails the freeze check, and a
+    repeated run resumes from the record. The outgoing freeze verifies again only once every
+    covered file matches it (a full rollback).
+    """
+    history = _history_dir(root, argument)
+    if not history.is_dir():
+        raise RefreezeError(f"{history.relative_to(root)} does not exist")
+    outgoing = _outgoing_freeze(root, history)
+    rejected = history / REJECTED_DIR
+    record_path = rejected / REJECTION_RECORD
+    if not record_path.is_file():
+        _publish(record_path, _prepare_rejection(root, history, outgoing))
+    record = _load_json(record_path.read_bytes(), REJECTION_RECORD)
+    manifest_path, lock_path = root / FREEZE_FILE, root / LOCK_FILE
+    seeds_path, seeds_lock_path = root / SEEDS_FILE, root / SEEDS_LOCK_FILE
+    files = {name: rejected / name for name in ("code_freeze.json", "code_freeze.lock.json", "seeds.lock.json")}
+    copies = {name: path.read_bytes() if path.is_file() else None for name, path in files.items()}
+    if not (isinstance(record, dict) and record.get("operation") == "reject"
+            and record.get("rejected_manifest_sha256") == _digest(copies["code_freeze.json"])
+            and record.get("rejected_lock_sha256") == _digest(copies["code_freeze.lock.json"])
+            and record.get("rejected_seeds_lock_sha256") == _digest(copies["seeds.lock.json"])
+            and record.get("restored_manifest_sha256") == _digest(outgoing["manifest"])
+            and record.get("restored_lock_sha256") == _digest(outgoing["lock"])):
+        raise RefreezeError(f"{REJECTION_RECORD} does not match the rejected copies and the outgoing freeze")
+    if _digest(seeds_path.read_bytes() if seeds_path.is_file() else None) != record.get("seeds_sha256"):
+        raise RefreezeError("seeds.json changed since the rejection was recorded")
+    restored_seeds = next((data for data in (outgoing["seeds_lock"], copies["seeds.lock.json"])
+                           if data is not None and _digest(data) == record.get("restored_seeds_lock_sha256")), None)
+    if record.get("restored_seeds_lock_sha256") is not None and restored_seeds is None:
+        raise RefreezeError("the seeds lock to restore is not archived")
+    rejected_manifest, rejected_lock = copies["code_freeze.json"], copies["code_freeze.lock.json"]
+    live_lock = lock_path.read_bytes() if lock_path.is_file() else None
+    live_manifest = manifest_path.read_bytes() if manifest_path.is_file() else None
+    if live_lock not in (None, rejected_lock, outgoing["lock"]) or live_manifest not in (
+            None, rejected_manifest, outgoing["manifest"]):
+        raise RefreezeError("the live manifest or lock is neither the rejected nor the outgoing one; inspect it")
+    if (live_lock == rejected_lock and live_manifest != rejected_manifest) or (
+            live_lock == outgoing["lock"] and live_manifest != outgoing["manifest"]):
+        raise RefreezeError("the live manifest and lock belong to different freezes; inspect them")
+    already = live_lock == outgoing["lock"]
+    if live_lock == rejected_lock:
+        _remove(lock_path)
+        live_lock = None
+    if live_manifest == rejected_manifest and live_lock is None:
+        _remove(manifest_path)
+        live_manifest = None
+    live_seeds = seeds_lock_path.read_bytes() if seeds_lock_path.is_file() else None
+    if live_seeds != restored_seeds:
+        if live_lock is not None or live_seeds is None or live_seeds != copies["seeds.lock.json"]:
+            raise RefreezeError("the live seeds lock is neither the rejected nor the restored one; inspect it")
+        _replace(seeds_lock_path, restored_seeds)
+    if live_manifest is None:
+        _publish(manifest_path, outgoing["manifest"])
+    if live_lock is None:
+        _publish(lock_path, outgoing["lock"])
+    if _digest(seeds_path.read_bytes() if seeds_path.is_file() else None) != record.get("seeds_sha256"):
+        raise RefreezeError("seeds.json changed during the rejection")
+    if already:
+        print(f"the freeze was already rejected into {rejected.relative_to(root)}")
+    else:
+        print(f"rejected the proposed freeze into {rejected.relative_to(root)}; the outgoing approved freeze is "
+              "live again and verifies only once every covered file matches it")
+
+
+def manifest_checks(freeze, root=PROJECT):
+    """Return ``(check, passed, detail)`` tuples comparing the project and environment with ``freeze``."""
+    results = []
+
+    def check(name, passed, detail=""):
+        results.append((name, bool(passed), detail))
+
+    current = file_hashes(root)
+    recorded = freeze.get("files_sha256", {})
+    check("covered file set unchanged (no file added or removed)", sorted(current) == sorted(recorded),
+          {"added": sorted(set(current) - set(recorded)), "removed": sorted(set(recorded) - set(current))})
+    changed = sorted(p for p in set(current) & set(recorded) if current[p] != recorded[p])
+    check("every covered file hash unchanged", not changed, changed)
+    imported = imported_project_modules(root)
+    check("every imported project module is covered", set(imported) <= set(recorded),
+          sorted(set(imported) - set(recorded)))
+    check("runtime parameters equal the freeze", parameters() == freeze.get("parameters"))
+    check("study spec defaults equal study_config", freeze.get("parameters", {}).get("study_spec_matches_config"))
+    variables = {name: os.environ.get(name) for name in REQUIRED_ENVIRONMENT}
+    check("required environment variables set", variables == REQUIRED_ENVIRONMENT, variables)
+    current_env = environment()
+    key = f"qiskit-{current_env['qiskit']}"
+    environments = freeze.get("environments", {})
+    check(f"environment {key} recorded", key in environments)
+    check(f"environment {key} unchanged", environments.get(key) == current_env)
+    check("qmutate imported from src/qmutate", current_env["qmutate_imported_from"] == "src/qmutate")
+    return results
+
+
+def verify(root=PROJECT, require_approved=False):
+    """Return every freeze check for the project at ``root``; any failure means fail closed."""
+    results = []
+
+    def check(name, passed, detail=""):
+        results.append((name, bool(passed), detail))
+
+    partials = leftover_partials(root)
+    check("no leftover partial freeze files", not partials, partials)
+    manifest_path, lock_path = root / FREEZE_FILE, root / LOCK_FILE
+    check("code freeze manifest exists", manifest_path.is_file())
+    check("code freeze lock exists", lock_path.is_file())
+    if not (manifest_path.is_file() and lock_path.is_file()):
+        return results
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+        lock = json.loads(lock_path.read_text())
+        freeze = json.loads(manifest_bytes)
+    except (OSError, ValueError) as error:
+        check("manifest and lock are readable JSON", False, str(error))
+        return results
+    objects = (isinstance(lock, dict) and isinstance(freeze, dict) and isinstance(freeze.get("parameters"), dict)
+               and isinstance(freeze.get("files_sha256"), dict) and isinstance(freeze.get("environments"), dict))
+    check("manifest and lock are JSON objects of the expected shape", objects,
+          {"lock": type(lock).__name__, "manifest": type(freeze).__name__})
+    if not objects:
+        return results
+    check("lock has exactly the fields manifest, sha256 and status", tuple(sorted(lock)) == LOCK_KEYS, sorted(lock))
+    check(f"lock names {FREEZE_FILE}", lock.get("manifest") == FREEZE_FILE, lock.get("manifest"))
+    check("manifest SHA-256 equals the lock", lock.get("sha256") == sha256_bytes(manifest_bytes), lock.get("sha256"))
+    status = lock.get("status")
+    check("lock status is proposed or approved", status in ("proposed", "approved"), status)
+    if require_approved:
+        check("code freeze approved", status == "approved", status)
+    results.extend(manifest_checks(freeze, root))
+    seeds, seeds_lock = root / SEEDS_FILE, root / SEEDS_LOCK_FILE
+    bound = None
+    if seeds_lock.is_file():
+        try:
+            bound = json.loads(seeds_lock.read_text())
+        except ValueError:
+            bound = None
+    seeds_sha = sha256_bytes(seeds.read_bytes()) if seeds.is_file() else None
+    recorded, problems = recorded_seed_hashes(root)
+    history_ok = not problems and (not recorded or (
+        set(recorded) == {seeds_sha} and isinstance(bound, dict) and bound.get("seeds_sha256") == seeds_sha))
+    check("seed history matches seeds.json and its lock", history_ok,
+          "" if history_ok else {"recorded": recorded, "problems": problems, "seeds_sha256": seeds_sha})
+    anchored = freeze["seeds"].get("sha256") if isinstance(freeze.get("seeds"), dict) else None
+    if anchored is not None:
+        check("manifest-recorded seeds hash matches seeds.json", seeds_sha == anchored,
+              {"recorded": anchored, "seeds_sha256": seeds_sha})
+    if seeds.exists():
+        problem = seed_file_problem(seeds)
+        check("valid seed file content (slots, order, range and revision)", problem is None, problem)
+    if seeds.exists() or seeds_lock.exists():
+        check("seeds file and seeds lock both exist", seeds.is_file() and seeds_lock.is_file())
+        if seeds.is_file() and seeds_lock.is_file():
+            check("seeds lock matches seeds.json, slot schema and manifest",
+                  bound == {"seeds_sha256": seeds_sha,
+                            "seed_slot_schema_sha256": freeze["parameters"].get("seed_slot_schema_sha256"),
+                            "code_freeze_sha256": sha256_bytes(manifest_bytes)})
+    else:
+        check("seeds not generated yet", not recorded and anchored is None,
+              {"recorded": sorted(recorded), "manifest": anchored})
+    return results
+
+
+def pending_rebind(root=PROJECT):
+    """Return whether the seeds lock is valid for ``seeds.json`` but bound to another manifest.
+
+    This is the state between ``--write`` and ``--rebind-seeds`` in a re-freeze.
+    """
+    manifest_path, seeds, seeds_lock = root / FREEZE_FILE, root / SEEDS_FILE, root / SEEDS_LOCK_FILE
+    if not (manifest_path.is_file() and seeds.is_file() and seeds_lock.is_file()):
+        return False
+    try:
+        bound = json.loads(seeds_lock.read_text())
+        schema = json.loads(manifest_path.read_text())["parameters"]["seed_slot_schema_sha256"]
+    except (ValueError, KeyError, TypeError):
+        return False
+    return (isinstance(bound, dict) and tuple(sorted(bound)) == SEEDS_LOCK_KEYS
+            and bound["seeds_sha256"] == sha256_bytes(seeds.read_bytes())
+            and bound["seed_slot_schema_sha256"] == schema
+            and bound["code_freeze_sha256"] != sha256_bytes(manifest_path.read_bytes()))
+
+
+def _report(results):
+    for name, passed, detail in results:
+        print(f"{'PASS' if passed else 'FAIL'}  {name}{'' if passed or not detail else '  ' + str(detail)}")
+    failed = [r for r in results if not r[1]]
+    print(f"{len(results) - len(failed)}/{len(results)} checks passed")
+    return not failed
+
+
+HISTORY_ACTIONS = {"--retire": retire, "--rebind-seeds": rebind_seeds, "--reject": reject}
+ACTIONS = ("--write", "--add-environment", "--approve", "--record-seeds") + tuple(HISTORY_ACTIONS)
+
+
+def parse_arguments(argv):
+    """Return ``(action, argument, require_approved)``; refuse any combination of actions.
+
+    Each action runs on its own, so one invocation can never chain steps the protocol
+    separates, such as writing and approving a freeze. ``--require-approved`` is accepted
+    only without an action. Unknown arguments are refused.
+    """
+    items = list(argv)
+    if not items:
+        return None, None, False
+    if items == ["--require-approved"]:
+        return None, None, True
+    first = items[0]
+    if first in HISTORY_ACTIONS and len(items) == 2 and not items[1].startswith("--"):
+        return first, items[1], False
+    if first in HISTORY_ACTIONS and len(items) == 1:
+        raise RefreezeError(f"a history directory inside {HISTORY_ROOT} is required after {first}")
+    if first in ACTIONS and len(items) == 1:
+        return first, None, False
+    raise RefreezeError(f"each of {', '.join(ACTIONS)} runs on its own, and --require-approved only without an "
+                        f"action; got {items}")
+
+
+def _seed_record(root, manifest_bytes):
+    seeds = root / SEEDS_FILE
+    return _serialize({
+        "operation": "record-seeds",
+        "seeds_sha256": sha256_bytes(seeds.read_bytes()),
+        "seed_slot_schema_sha256": json.loads(manifest_bytes)["parameters"]["seed_slot_schema_sha256"],
+        "code_freeze_sha256": sha256_bytes(manifest_bytes),
+    })
+
+
+def _act(action, argument, root):
+    manifest_path, lock_path = root / FREEZE_FILE, root / LOCK_FILE
+    if action in HISTORY_ACTIONS:
+        HISTORY_ACTIONS[action](root, argument)
+        if action == "--rebind-seeds":
+            return 0 if _report(verify(root)) else 1
+        if action == "--reject":
+            _report(verify(root))
+        return 0
+    if action == "--write":
+        if manifest_path.exists() or lock_path.exists():
+            print("refusing: a manifest or lock already exists; a new freeze needs both removed deliberately")
+            return 1
+        anchor = seeds_to_anchor(root)
+        data = _serialize(build_freeze({f"qiskit-{environment()['qiskit']}": environment()}, root, anchor))
+        _write_exclusive(manifest_path, data)
+        _write_exclusive(lock_path, _serialize({"manifest": FREEZE_FILE, "sha256": sha256_bytes(data),
+                                                "status": "proposed"}))
+        print(f"wrote {FREEZE_FILE} and {LOCK_FILE} (proposed)")
+    if action == "--add-environment":
+        results = verify(root)
+        others = [r for r in results if not r[1] and not r[0].startswith(("environment qiskit-", "seeds"))]
+        if others:
+            print("refusing: only a proposed freeze whose other checks pass can gain an environment")
+            _report(results)
+            return 1
+        lock = _checked_lock(lock_path.read_bytes(), manifest_path.read_bytes(), LOCK_FILE)
+        if lock["status"] != "proposed":
+            print("refusing: only a proposed freeze can gain an environment")
+            return 1
+        seeds_lock = root / SEEDS_LOCK_FILE
+        if seeds_lock.is_file():
+            try:
+                bound = json.loads(seeds_lock.read_text())
+            except ValueError:
+                bound = None
+            if isinstance(bound, dict) and bound.get("code_freeze_sha256") == sha256_bytes(manifest_path.read_bytes()):
+                print("refusing: the seeds lock is already bound to this manifest; adding an environment would break it")
+                return 1
+        freeze = json.loads(manifest_path.read_text())
+        freeze["environments"][f"qiskit-{environment()['qiskit']}"] = environment()
+        data = _serialize(build_freeze(freeze["environments"], root, (freeze.get("seeds") or {}).get("sha256")))
+        _replace(manifest_path, data)
+        _replace(lock_path, _serialize({"manifest": FREEZE_FILE, "sha256": sha256_bytes(data), "status": "proposed"}))
+        print(f"added environment qiskit-{environment()['qiskit']}")
+    if action == "--approve":
+        results = verify(root)
+        if not all(r[1] for r in results):
+            print("refusing: approval needs every check to pass")
+            _report(results)
+            return 1
+        manifest = json.loads(manifest_path.read_text())
+        missing = [f"qiskit-{v}" for v in REQUIRED_QISKIT_VERSIONS if f"qiskit-{v}" not in manifest["environments"]]
+        if missing:
+            print(f"refusing: approval needs every protocol environment recorded; missing {missing}")
+            return 1
+        lock = json.loads(lock_path.read_text())
+        lock["status"] = "approved"
+        _replace(lock_path, _serialize(lock))
+        print("code freeze approved")
+    if action == "--record-seeds":
+        results = verify(root, require_approved=True)
+        seeds, seeds_lock = root / SEEDS_FILE, root / SEEDS_LOCK_FILE
+        others = [r for r in results if not r[1] and not r[0].startswith("seed")]
+        if others or not seeds.is_file() or seeds_lock.exists():
+            print("refusing: needs an approved, passing freeze, an existing seeds.json and no seeds lock")
+            return 1
+        manifest_bytes = manifest_path.read_bytes()
+        record = _seed_record(root, manifest_bytes)
+        recorded, problems = recorded_seed_hashes(root)
+        own = {sha256_bytes(seeds.read_bytes()): [SEEDS_RECORD_FILE]}
+        resumable = (root / SEEDS_RECORD_FILE).is_file() and (root / SEEDS_RECORD_FILE).read_bytes() == record
+        if problems or (recorded and not (resumable and recorded == own)):
+            print("refusing: seeds are already recorded in the seed history; --record-seeds is the first binding only")
+            return 1
+        (root / HISTORY_ROOT).mkdir(parents=True, exist_ok=True)
+        _publish(root / SEEDS_RECORD_FILE, record)
+        _write_exclusive(seeds_lock, _serialize({
+            "seeds_sha256": sha256_bytes(seeds.read_bytes()),
+            "seed_slot_schema_sha256": json.loads(manifest_bytes)["parameters"]["seed_slot_schema_sha256"],
+            "code_freeze_sha256": sha256_bytes(manifest_bytes),
+        }))
+        print(f"wrote {SEEDS_LOCK_FILE} and {SEEDS_RECORD_FILE}")
+    results = verify(root)
+    passed = _report(results)
+    if not passed and action in ("--write", "--add-environment") and pending_rebind(root):
+        if all(r[1] for r in results if not r[0].startswith("seeds")):
+            print("the seeds lock awaits --rebind-seeds; only the seed binding check fails")
+            return 0
+    return 0 if passed else 1
+
+
+def main(argv, root=PROJECT):
+    """Run the requested freeze action on its own, then verify; refusals print the reason and return 1."""
+    try:
+        action, argument, require_approved = parse_arguments(argv)
+        if action is None:
+            return 0 if _report(verify(root, require_approved=require_approved)) else 1
+        return _act(action, argument, root)
+    except RefreezeError as error:
+        print(f"refusing: {error}")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
