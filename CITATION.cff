@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use qmutate in your research, please cite it using these metadata."
+type: software
+title: "qmutate: mutation testing for Qiskit quantum circuits"
+abstract: >-
+  qmutate is a pre-alpha Python library for mutation testing of quantum circuits built with
+  Qiskit. It removes one top-level instruction at a time from a circuit, runs a user-supplied
+  test oracle against every mutant, and reports the outcomes and a mutation score. It also
+  provides numerical equivalence checks for an equivalence-adjusted score and a finite-shot
+  sampling oracle whose verdicts carry statistical guarantees under stated assumptions.
+authors:
+  - alias: rasidi3112
+version: 0.1.0
+license: Apache-2.0
+repository-code: "https://github.com/rasidi3112/qmutate"
+url: "https://github.com/rasidi3112/qmutate"
+keywords:
+  - quantum computing
+  - quantum circuits
+  - mutation testing
+  - software testing
+  - Qiskit

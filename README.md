@@ -821,6 +821,13 @@ Planned, not yet implemented:
    would change it; this would be a simple bound, not a statistical confidence interval.
 6. Adapters for other quantum SDKs.
 
+## Citation
+
+If you use qmutate in your research, please cite it with the metadata in [CITATION.cff](CITATION.cff).
+On GitHub, the "Cite this repository" button shows the same citation in APA and BibTeX formats.
+
 ## License
+
+Copyright 2026 rasidi3112.
 
 qmutate is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full text.
