@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} on Ubuntu
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install qmutate with the test extra
+        run: python -m pip install -e ".[test]"
+      - name: Show versions
+        run: python -c "import platform, qiskit, numpy, qmutate; print(platform.platform(), platform.python_version(), 'qiskit', qiskit.__version__, 'numpy', numpy.__version__, 'qmutate', qmutate.__version__)"
+      - name: Run the tests
+        run: python -m pytest
