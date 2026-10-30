@@ -1,5 +1,7 @@
 # qmutate
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23796968.svg)](https://doi.org/10.5281/zenodo.23796968)
+
 qmutate is an early-stage Python library for mutation testing of quantum circuits built with
 [Qiskit](https://www.ibm.com/quantum/qiskit). It removes one instruction at a time from a circuit, runs
 your test oracle against every such mutant, and reports which mutants your tests detect. It also
@@ -825,6 +827,9 @@ Planned, not yet implemented:
 
 If you use qmutate in your research, please cite it with the metadata in [CITATION.cff](CITATION.cff).
 On GitHub, the "Cite this repository" button shows the same citation in APA and BibTeX formats.
+Every release is archived on Zenodo: the DOI
+[10.5281/zenodo.23796968](https://doi.org/10.5281/zenodo.23796968) always resolves to the latest
+version, and version 0.1.0 has the DOI [10.5281/zenodo.23796969](https://doi.org/10.5281/zenodo.23796969).
 
 ## License
 

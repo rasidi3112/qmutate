@@ -11,6 +11,14 @@ abstract: >-
 authors:
   - alias: rasidi3112
 version: 0.1.0
+doi: 10.5281/zenodo.23796968
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23796968
+    description: "Concept DOI for all versions of qmutate"
+  - type: doi
+    value: 10.5281/zenodo.23796969
+    description: "DOI for qmutate version 0.1.0"
 license: Apache-2.0
 repository-code: "https://github.com/rasidi3112/qmutate"
 url: "https://github.com/rasidi3112/qmutate"
