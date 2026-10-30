@@ -1,5 +1,6 @@
 # qmutate
 
+[![tests](https://github.com/rasidi3112/qmutate/actions/workflows/tests.yml/badge.svg)](https://github.com/rasidi3112/qmutate/actions/workflows/tests.yml)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23796968.svg)](https://doi.org/10.5281/zenodo.23796968)
 
 qmutate is an early-stage Python library for mutation testing of quantum circuits built with
@@ -705,19 +706,22 @@ described in [evaluation/PROTOCOL.md](evaluation/PROTOCOL.md) (section 16) and
 
 ## Verified versions
 
-`pyproject.toml` allows Python `>=3.11` and `qiskit>=2.0,<3`. These combinations were actually run, all
-on macOS arm64:
+`pyproject.toml` allows Python `>=3.11` and `qiskit>=2.0,<3`. These combinations were actually run:
 
-| Python | Qiskit | What was run |
-|---|---|---|
-| 3.11.14 | 2.6.1 | all 803 tests; the Phase 6A study |
-| 3.11.14 | 2.0.3 | all 803 tests; the Phase 6A study |
-| 3.11.14 | 2.0.0 and 2.3.1 | the 632 library tests |
-| 3.13.5 and 3.14.6 | 2.6.1 | the 632 library tests |
+| Platform | Python | Qiskit | What was run |
+|---|---|---|---|
+| macOS arm64 | 3.11.14 | 2.6.1 | all 803 tests; the Phase 6A study |
+| macOS arm64 | 3.11.14 | 2.0.3 | all 803 tests; the Phase 6A study |
+| macOS arm64 | 3.11.14 | 2.0.0 and 2.3.1 | the 632 library tests |
+| macOS arm64 | 3.13.5 and 3.14.6 | 2.6.1 | the 632 library tests |
+| Linux x86_64 (Ubuntu, GitHub Actions) | 3.11.17, 3.12.15 and 3.13.17 | 2.6.1 | all 803 tests |
 
-Not verified: Python 3.12; Qiskit 2.0.1–2.0.2, 2.1, 2.2, 2.4 and 2.5; Linux and Windows. Seeded sampling
-results are not promised to be identical across Qiskit versions (see
-[Known limitations](#known-limitations)).
+The [tests workflow](.github/workflows/tests.yml) runs all 803 tests on Ubuntu with Python 3.11,
+3.12 and 3.13 on every push, with the newest Qiskit release that `pyproject.toml` allows. The Phase 6A
+study was run on macOS arm64 only.
+
+Not verified: Qiskit 2.0.1–2.0.2, 2.1, 2.2, 2.4 and 2.5; Windows. Seeded sampling results are not
+promised to be identical across Qiskit versions (see [Known limitations](#known-limitations)).
 
 ## Known limitations
 
