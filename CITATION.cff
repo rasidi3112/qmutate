@@ -9,7 +9,10 @@ abstract: >-
   provides numerical equivalence checks for an equivalence-adjusted score and a finite-shot
   sampling oracle whose verdicts carry statistical guarantees under stated assumptions.
 authors:
-  - alias: rasidi3112
+  - family-names: Ahmad
+    given-names: Rasidi
+    orcid: "https://orcid.org/0009-0007-3045-9559"
+    alias: rasidi3112
 version: 0.1.0
 doi: 10.5281/zenodo.23796968
 identifiers:
